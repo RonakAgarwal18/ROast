@@ -100,8 +100,9 @@ npx tsx scripts/update-prices.ts       # latest closes + daily snapshots
 
 The seed data is a real evening (5 Nov 2026): Gemini's 7 picks as a ₹1L
 paper portfolio at ₹10,000 per pick, Hanu's Nykaa call, the owner's real
-holdings (Groww, Ather, Premier Energies, Stallion), a pending Nykaa limit
-order, 5 dated claims, the catalyst calendar, and a baseline portfolio
+holdings (Groww, Ather, Premier Energies, Stallion, and Nykaa — the limit
+order placed that evening filled the next morning, 6 Nov, @ ₹350.00),
+5 dated claims, the catalyst calendar, and a baseline portfolio
 snapshot for that day.
 
 ## Project structure

@@ -106,30 +106,31 @@ async function main() {
       name: "Ronak (real)",
       ownerSourceId: ronak.id,
       isReal: true,
-      startingCash: 24856.3,
+      startingCash: 28356.3,
       cash: 0,
     },
   });
-  const realPositions: Array<[string, number, number, string | null]> = [
+  const realPositions: Array<[string, number, number, string | null, string?]> = [
     ["GROWW", 40, 219.65, null],
     ["ATHER", 4, 1659.95, null],
     ["PREMIERENE", 6, 890.85, "SELL DECIDED"],
     ["STALLION", 20, 204.27, "HOLD TILL DEC"],
+    ["NYKAA", 10, 350.0, null, "2026-11-06"], // limit order filled 6 Nov @ ₹350.00
   ];
-  for (const [symbol, units, entry, tag] of realPositions) {
+  for (const [symbol, units, entry, tag, entryDay] of realPositions) {
     await prisma.position.create({
       data: {
         portfolioId: realPf.id,
         stockId: stocks[symbol],
         units,
         entryPrice: entry,
-        entryDate: NOV5,
+        entryDate: entryDay ? d(entryDay) : NOV5,
         tag,
       },
     });
   }
 
-  /* ---------- Pending order (My Desk) ---------- */
+  /* ---------- Nykaa order (My Desk) — filled 6 Nov 2026 @ ₹350.00 ---------- */
   await prisma.order.create({
     data: {
       stockId: stocks["NYKAA"],
@@ -138,7 +139,7 @@ async function main() {
       targetLow: 385,
       targetHigh: 415,
       exitPrice: 340,
-      status: "PLACED",
+      status: "FILLED",
     },
   });
 
@@ -281,6 +282,12 @@ async function main() {
       text: "Premier sell decided for tomorrow. Nykaa limit order placed @ 350.30. Gemini's 7 picks entered the league.",
     },
   });
+  await prisma.dayNote.create({
+    data: {
+      date: d("2026-11-06"),
+      text: "Nykaa limit order filled @ 350.00. Premier sell not yet executed.",
+    },
+  });
 
   /* ---------- Baseline snapshots (5 Nov 2026) ---------- */
   // The equity curves start here: one PortfolioSnapshot per portfolio,
@@ -289,7 +296,9 @@ async function main() {
     include: { positions: { include: { stock: true } } },
   });
   for (const p of allPf) {
-    const open = p.positions.filter((x) => x.status === "OPEN");
+    // Baseline is the 5 Nov close of play — positions entered later
+    // (the 6 Nov Nykaa fill) are holdings now, but were not held on 5 Nov.
+    const open = p.positions.filter((x) => x.status === "OPEN" && x.entryDate <= NOV5);
     const invested = open.reduce((s, x) => s + x.units * x.entryPrice, 0);
     const market = open.reduce((s, x) => s + x.units * (x.stock.lastClose ?? 0), 0);
     const totalValue = p.isReal ? market : p.cash + market;

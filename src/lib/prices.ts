@@ -224,11 +224,16 @@ export async function applyBhavcopy(
   const closeDate = dayDate(date);
   let updated = 0;
 
-  const applyOne = async (stockId: number, close: number, prevClose: number | null) => {
-    await prisma.stock.update({
-      where: { id: stockId },
-      data: { lastClose: close, prevClose, closeDate },
-    });
+  // Collect every stock write first (in the original application order:
+  // symbol rows, then name-matched rows, then index rows), then flush
+  // them in chunked transactions — one DB round-trip per chunk instead
+  // of one per stock. A full-master run is ~5k stocks; sequential
+  // per-stock updates took ~10 minutes, the batched flush takes seconds.
+  // Duplicate writes to the same stock still apply in order (last wins),
+  // exactly as the sequential version behaved.
+  const pending: Array<{ id: number; close: number; prevClose: number | null }> = [];
+  const queue = (stockId: number, close: number, prevClose: number | null) => {
+    pending.push({ id: stockId, close, prevClose });
     updated++;
   };
 
@@ -240,7 +245,7 @@ export async function applyBhavcopy(
     const bySymbol = new Map(stocks.map((s) => [s.symbol, s.id]));
     for (const row of parsed.prices) {
       const id = bySymbol.get(row.symbol);
-      if (id !== undefined) await applyOne(id, row.close, row.prevClose);
+      if (id !== undefined) queue(id, row.close, row.prevClose);
     }
   }
 
@@ -253,19 +258,26 @@ export async function applyBhavcopy(
     }
     for (const row of parsed.byName) {
       const id = byName.get(row.name);
-      if (id !== undefined) await applyOne(id, row.close, row.prevClose);
+      if (id !== undefined) queue(id, row.close, row.prevClose);
     }
   }
 
   for (const idx of parsed.index) {
     const stock = await prisma.stock.findUnique({ where: { symbol: idx.symbol } });
-    if (stock) {
-      await prisma.stock.update({
-        where: { id: stock.id },
-        data: { prevClose: stock.lastClose, lastClose: idx.close, closeDate },
-      });
-      updated++;
-    }
+    if (stock) queue(stock.id, idx.close, stock.lastClose);
+  }
+
+  const CHUNK = 250;
+  for (let i = 0; i < pending.length; i += CHUNK) {
+    const slice = pending.slice(i, i + CHUNK);
+    await prisma.$transaction(
+      slice.map((u) =>
+        prisma.stock.update({
+          where: { id: u.id },
+          data: { lastClose: u.close, prevClose: u.prevClose, closeDate },
+        })
+      )
+    );
   }
 
   const snapshots = await writeSnapshots(date);
@@ -280,18 +292,20 @@ export async function writeSnapshots(dateIso: string): Promise<number> {
   const date = dayDate(dateIso);
   const nifty = await prisma.stock.findUnique({ where: { symbol: "NIFTY" } });
   const rows = await portfolioRows();
-  for (const r of rows) {
-    await prisma.portfolioSnapshot.upsert({
-      where: { portfolioId_date: { portfolioId: r.id, date } },
-      update: { totalValue: r.totalValue, returnPct: r.returnPct, niftyClose: nifty?.lastClose ?? null },
-      create: {
-        portfolioId: r.id,
-        date,
-        totalValue: r.totalValue,
-        returnPct: r.returnPct,
-        niftyClose: nifty?.lastClose ?? null,
-      },
-    });
-  }
+  await prisma.$transaction(
+    rows.map((r) =>
+      prisma.portfolioSnapshot.upsert({
+        where: { portfolioId_date: { portfolioId: r.id, date } },
+        update: { totalValue: r.totalValue, returnPct: r.returnPct, niftyClose: nifty?.lastClose ?? null },
+        create: {
+          portfolioId: r.id,
+          date,
+          totalValue: r.totalValue,
+          returnPct: r.returnPct,
+          niftyClose: nifty?.lastClose ?? null,
+        },
+      })
+    )
+  );
   return rows.length;
 }
