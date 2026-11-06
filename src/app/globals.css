@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/* ROast design tokens — dark charcoal (green-tinted), Groww green, amber.
+   No blue anywhere in this product. */
+@theme inline {
+  --color-base: #0b0f0c;
+  --color-panel: #12170f;
+  --color-panel2: #171d13;
+  --color-edge: #243020;
+  --color-groww: #00d09c;
+  --color-groww-dim: #0a3d2e;
+  --color-ambery: #ffb547;
+  --color-loss: #ff6b5e;
+  --color-cream: #edf3ea;
+  --color-muted: #93a48f;
+
+  --font-display: var(--font-space-grotesk);
+  --font-sans: var(--font-inter);
+  --font-accent: var(--font-instrument);
+}
+
+html {
+  background: var(--color-base);
+}
+
+body {
+  background: var(--color-base);
+  color: var(--color-cream);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Rotating circular badge on the landing hero */
+@keyframes roast-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-roast-spin {
+  animation: roast-spin 18s linear infinite;
+}
+
+/* Verdict stamp — rotated, hard border, uppercase */
+.stamp {
+  display: inline-block;
+  transform: rotate(-4deg);
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+/* Pill tag with a hard outline (Tags-project language) */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1.5px solid var(--color-edge);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Soft green glow used behind the landing hero */
+.hero-glow {
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 0%, rgba(0, 208, 156, 0.16), transparent 70%),
+    radial-gradient(ellipse 35% 25% at 85% 20%, rgba(255, 181, 71, 0.07), transparent 70%);
+}
+
+input, select, textarea {
+  outline: none;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--color-groww) !important;
+}

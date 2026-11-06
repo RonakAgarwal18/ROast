@@ -1,0 +1,161 @@
+// ROast — data model
+// v1 runs on SQLite (zero-config file DB) so the app boots anywhere.
+// To deploy on PostgreSQL (Neon): change `provider` to "postgresql" and point
+// DATABASE_URL at Neon — no model changes needed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A listed stock (or the NIFTY index, exchange = "INDEX").
+/// lastClose is updated nightly from the exchange bhavcopy (see scripts/prices.README.md).
+model Stock {
+  id        Int      @id @default(autoincrement())
+  symbol    String   @unique
+  name      String
+  exchange  String // NSE | BSE | INDEX
+  lastClose Float
+  closeDate DateTime
+
+  positions Position[]
+  orders    Order[]
+  claims    Claim[]
+  events    CatalystEvent[]
+}
+
+/// Who served the picks — an AI (Gemini, Hanu, ...) or a human (Ronak).
+model Source {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  kind String // AI | HUMAN
+
+  portfolios Portfolio[]
+  claims     Claim[]
+}
+
+/// A paper portfolio (or the owner's real one, isReal = true).
+model Portfolio {
+  id            Int     @id @default(autoincrement())
+  name          String  @unique
+  ownerSourceId Int
+  owner         Source  @relation(fields: [ownerSourceId], references: [id])
+  isReal        Boolean @default(false)
+  startingCash  Float
+  cash          Float // remaining virtual cash (paper portfolios)
+  sizingRule    String  @default("FIXED") // FIXED | PERCENT
+  createdAt     DateTime @default(now())
+
+  positions Position[]
+  claims    Claim[]
+}
+
+/// One position in a portfolio. Fractional units are allowed (paper league).
+/// entryPrice is user-editable; Stock.lastClose is only the pre-filled default.
+model Position {
+  id          Int       @id @default(autoincrement())
+  portfolioId Int
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+  stockId     Int
+  stock       Stock     @relation(fields: [stockId], references: [id])
+  units       Float
+  entryPrice  Float
+  entryDate   DateTime
+  targetPrice Float?
+  exitPrice   Float? // planned stop / "wrong line"
+  status      String    @default("OPEN") // OPEN | CLOSED
+  tag         String? // e.g. "SELL DECIDED", "HOLD TILL DEC"
+  sellPrice   Float?
+  sellDate    DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+/// A pending order on the real desk (My Desk).
+model Order {
+  id         Int    @id @default(autoincrement())
+  stockId    Int
+  stock      Stock  @relation(fields: [stockId], references: [id])
+  qty        Float
+  limitPrice Float
+  targetLow  Float?
+  targetHigh Float?
+  exitPrice  Float?
+  status     String @default("PLACED") // PLACED | FILLED | CANCELLED | EXPIRED
+  createdAt  DateTime @default(now())
+}
+
+/// Verdict scale (kitchen language):
+/// ON_THE_STOVE (pending) · WELL_DONE (fully true) · HALF_COOKED (partial)
+/// ROASTED (false) · BURNT (disastrously wrong) · NO_RECIPE (too vague to judge)
+enum ClaimVerdict {
+  ON_THE_STOVE
+  WELL_DONE
+  HALF_COOKED
+  ROASTED
+  BURNT
+  NO_RECIPE
+}
+
+/// A single falsifiable claim inside an analysis, kept verbatim forever.
+model Claim {
+  id            Int          @id @default(autoincrement())
+  sourceId      Int
+  source        Source       @relation(fields: [sourceId], references: [id])
+  stockId       Int
+  stock         Stock        @relation(fields: [stockId], references: [id])
+  portfolioId   Int?
+  portfolio     Portfolio?   @relation(fields: [portfolioId], references: [id])
+  claimText     String // the claim, as stated
+  quoteSentence String // the exact sentence from the source text (the receipt)
+  dueDate       DateTime
+  verdict       ClaimVerdict @default(ON_THE_STOVE)
+  createdAt     DateTime     @default(now()) // immutable record of when it was logged
+
+  items ClaimItem[]
+}
+
+/// One tick-box under a claim.
+model ClaimItem {
+  id      Int    @id @default(autoincrement())
+  claimId Int
+  claim   Claim  @relation(fields: [claimId], references: [id])
+  label   String
+  state   String @default("PENDING") // VERIFIED | PENDING | NO_RECEIPT | FAILED
+}
+
+/// A dated market event (results, rule change, data release).
+model CatalystEvent {
+  id      Int      @id @default(autoincrement())
+  date    DateTime
+  stockId Int?
+  stock   Stock?   @relation(fields: [stockId], references: [id])
+  title   String
+  kind    String // RESULTS | REGULATORY | DATA | OTHER
+}
+
+/// A pasted analysis, stored verbatim. Append-only by design:
+/// confirmed pastes are the receipts — the app offers no edit path for them.
+model SourceText {
+  id        Int      @id @default(autoincrement())
+  sourceId  Int?
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+/// One line of the day journal (My Desk).
+model DayNote {
+  id   Int      @id @default(autoincrement())
+  date DateTime
+  text String
+}
+
+/// A standing rule of the house (My Desk rules panel).
+model Rule {
+  id   Int    @id @default(autoincrement())
+  text String
+}

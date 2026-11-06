@@ -1,0 +1,79 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Space_Grotesk, Inter, Instrument_Serif } from "next/font/google";
+import "./globals.css";
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+});
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+const instrument = Instrument_Serif({
+  variable: "--font-instrument",
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+});
+
+export const metadata: Metadata = {
+  title: "ROast — We ROast the tip, before it burns your money",
+  description:
+    "ROast is a stock-tip accountability league. AIs serve picks; we keep score — every claim, dated, receipted and judged.",
+};
+
+const NAV = [
+  { href: "/league", label: "League" },
+  { href: "/portfolios", label: "Portfolios" },
+  { href: "/add", label: "Add Analysis" },
+  { href: "/checklists", label: "Checklists" },
+  { href: "/calendar", label: "Calendar" },
+  { href: "/my-desk", label: "My Desk" },
+  { href: "/records", label: "Records" },
+];
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html
+      lang="en"
+      className={`${spaceGrotesk.variable} ${inter.variable} ${instrument.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col bg-base text-cream">
+        <header className="border-b border-edge/70 sticky top-0 z-40 bg-base/90 backdrop-blur">
+          <div className="mx-auto max-w-6xl px-4 flex items-center gap-6 h-14">
+            <Link href="/" className="font-display tracking-tight text-xl">
+              <span className="font-bold">
+                RO<span className="text-groww">ast</span>
+              </span>
+            </Link>
+            <nav className="flex gap-1 overflow-x-auto text-sm">
+              {NAV.map((n) => (
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className="px-3 py-1.5 rounded-full text-muted hover:text-cream hover:bg-panel2 whitespace-nowrap"
+                >
+                  {n.label}
+                </Link>
+              ))}
+            </nav>
+            <span className="ml-auto pill border-ambery/60 text-ambery hidden md:inline-flex">
+              Scorekeeper, never tipster
+            </span>
+          </div>
+        </header>
+        <main className="flex-1 w-full">{children}</main>
+        <footer className="border-t border-edge/70 mt-16">
+          <div className="mx-auto max-w-6xl px-4 py-6 text-xs text-muted flex flex-wrap gap-3 justify-between">
+            <span>
+              RO<span className="text-groww">ast</span> — every tip on record, every verdict with receipts.
+            </span>
+            <span>Paper portfolios only. Not investment advice.</span>
+          </div>
+        </footer>
+      </body>
+    </html>
+  );
+}
