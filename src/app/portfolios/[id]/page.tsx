@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { inr, price, pct, fmtDate } from "@/lib/format";
+import { portfolioSnapshots } from "@/lib/stats";
+import { inr, price, priceOpt, pct, fmtDate } from "@/lib/format";
 import { addPosition, closePosition } from "@/lib/actions";
 import { PageTitle, VerdictStamp } from "@/components/ui";
+import { EquityChart } from "@/components/Sparkline";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +28,10 @@ export default async function PortfolioDetail({
   if (!portfolio) notFound();
 
   const stocks = await prisma.stock.findMany({ orderBy: { name: "asc" } });
+  const snaps = await portfolioSnapshots(portfolio.id);
   const open = portfolio.positions.filter((p) => p.status === "OPEN");
   const invested = open.reduce((s, p) => s + p.units * p.entryPrice, 0);
-  const market = open.reduce((s, p) => s + p.units * p.stock.lastClose, 0);
+  const market = open.reduce((s, p) => s + p.units * (p.stock.lastClose ?? 0), 0);
   const firstStock = stocks[0];
 
   return (
@@ -42,8 +45,29 @@ export default async function PortfolioDetail({
         } · open positions worth ${inr(market)} on ${inr(invested)} deployed`}
       />
 
+      {/* Equity curve from daily snapshots */}
+      <div className="rounded-2xl border border-edge bg-panel p-5 mb-8">
+        <h2 className="font-display text-xl font-bold mb-3">Equity curve</h2>
+        <EquityChart
+          series={[
+            {
+              name: portfolio.name,
+              color: "#00D09C",
+              points: snaps.map((s) => ({ date: s.date, value: s.totalValue })),
+            },
+          ]}
+          height={110}
+        />
+        {snaps.length === 1 && (
+          <p className="text-xs text-muted mt-2">
+            Baseline frozen on {fmtDate(snaps[0].date)} — the curve draws itself as the price
+            pipeline writes a snapshot per trading day.
+          </p>
+        )}
+      </div>
+
       {/* Holdings */}
-      <div className="rounded-2xl border border-edge overflow-hidden mb-8">
+      <div className="rounded-2xl border border-edge overflow-x-auto mb-8">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-panel2 text-left text-muted uppercase text-xs tracking-wider">
@@ -58,8 +82,12 @@ export default async function PortfolioDetail({
           </thead>
           <tbody>
             {open.map((p) => {
-              const pnl = (p.stock.lastClose - p.entryPrice) * p.units;
-              const pnlPct = ((p.stock.lastClose - p.entryPrice) / p.entryPrice) * 100;
+              const pnl =
+                p.stock.lastClose !== null ? (p.stock.lastClose - p.entryPrice) * p.units : null;
+              const pnlPct =
+                p.stock.lastClose !== null
+                  ? ((p.stock.lastClose - p.entryPrice) / p.entryPrice) * 100
+                  : null;
               return (
                 <tr key={p.id} className="border-t border-edge/60 bg-panel">
                   <td className="px-4 py-3">
@@ -70,9 +98,19 @@ export default async function PortfolioDetail({
                   </td>
                   <td className="px-4 py-3 text-right">{p.units.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right">{price(p.entryPrice)}</td>
-                  <td className="px-4 py-3 text-right">{price(p.stock.lastClose)}</td>
-                  <td className={`px-4 py-3 text-right font-display font-bold ${pnl >= 0 ? "text-groww" : "text-loss"}`}>
-                    {inr(pnl)} <span className="text-xs">({pct(pnlPct)})</span>
+                  <td className="px-4 py-3 text-right">{priceOpt(p.stock.lastClose)}</td>
+                  <td
+                    className={`px-4 py-3 text-right font-display font-bold ${
+                      pnl === null ? "text-muted" : pnl >= 0 ? "text-groww" : "text-loss"
+                    }`}
+                  >
+                    {pnl === null ? (
+                      "—"
+                    ) : (
+                      <>
+                        {inr(pnl)} <span className="text-xs">({pct(pnlPct ?? 0)})</span>
+                      </>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {p.tag && <span className="pill border-ambery/60 text-ambery">{p.tag}</span>}
@@ -120,7 +158,7 @@ export default async function PortfolioDetail({
           <select name="stockId" className={`${inputCls} w-56`} defaultValue={firstStock?.id}>
             {stocks.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} (#{s.symbol}) — close {price(s.lastClose)}
+                {s.name} (#{s.symbol}) — close {priceOpt(s.lastClose)}
               </option>
             ))}
           </select>

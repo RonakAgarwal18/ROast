@@ -11,6 +11,7 @@ async function main() {
   // Wipe (children first).
   await prisma.claimItem.deleteMany();
   await prisma.claim.deleteMany();
+  await prisma.portfolioSnapshot.deleteMany();
   await prisma.position.deleteMany();
   await prisma.order.deleteMany();
   await prisma.catalystEvent.deleteMany();
@@ -28,7 +29,7 @@ async function main() {
     { symbol: "ASHOKLEY", name: "Ashok Leyland", exchange: "NSE", lastClose: 170.21 },
     { symbol: "TECHNOE", name: "Techno Electric", exchange: "NSE", lastClose: 942.75 },
     { symbol: "HBLENGINE", name: "HBL Engineering", exchange: "NSE", lastClose: 855.2 },
-    { symbol: "PGIL", name: "PN Gadgil Jewellers", exchange: "NSE", lastClose: 600.9 },
+    { symbol: "PNGJL", name: "PN Gadgil Jewellers", exchange: "NSE", lastClose: 600.9 },
     { symbol: "DEVYANI", name: "Devyani International", exchange: "NSE", lastClose: 129.21 },
     { symbol: "NYKAA", name: "Nykaa", exchange: "NSE", lastClose: 350.3 },
     { symbol: "GROWW", name: "Groww (Billionbrains)", exchange: "NSE", lastClose: 223.89 },
@@ -64,7 +65,7 @@ async function main() {
     ["ASHOKLEY", 170.21],
     ["TECHNOE", 942.75],
     ["HBLENGINE", 855.2],
-    ["PGIL", 600.9],
+    ["PNGJL", 600.9],
     ["DEVYANI", 129.21],
   ];
   for (const [symbol, entry] of geminiPicks) {
@@ -281,7 +282,30 @@ async function main() {
     },
   });
 
-  console.log("ROast seed complete: 13 stocks, 3 portfolios, 5 claims, 7 events.");
+  /* ---------- Baseline snapshots (5 Nov 2026) ---------- */
+  // The equity curves start here: one PortfolioSnapshot per portfolio,
+  // computed exactly the way src/lib/stats.ts computes live values.
+  const allPf = await prisma.portfolio.findMany({
+    include: { positions: { include: { stock: true } } },
+  });
+  for (const p of allPf) {
+    const open = p.positions.filter((x) => x.status === "OPEN");
+    const invested = open.reduce((s, x) => s + x.units * x.entryPrice, 0);
+    const market = open.reduce((s, x) => s + x.units * (x.stock.lastClose ?? 0), 0);
+    const totalValue = p.isReal ? market : p.cash + market;
+    const base = p.isReal ? invested : p.startingCash;
+    await prisma.portfolioSnapshot.create({
+      data: {
+        portfolioId: p.id,
+        date: NOV5,
+        totalValue,
+        returnPct: base > 0 ? ((totalValue - base) / base) * 100 : 0,
+        niftyClose: 24536.6,
+      },
+    });
+  }
+
+  console.log("ROast seed complete: 13 stocks, 3 portfolios, 5 claims, 7 events, 3 baseline snapshots.");
 }
 
 main()

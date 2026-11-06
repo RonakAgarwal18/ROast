@@ -31,7 +31,7 @@ export async function portfolioRows(): Promise<PortfolioRow[]> {
   return portfolios.map((p) => {
     const open = p.positions.filter((x) => x.status === "OPEN");
     const invested = open.reduce((s, x) => s + x.units * x.entryPrice, 0);
-    const marketValue = open.reduce((s, x) => s + x.units * x.stock.lastClose, 0);
+    const marketValue = open.reduce((s, x) => s + x.units * (x.stock.lastClose ?? 0), 0);
     const totalValue = p.isReal ? marketValue : p.cash + marketValue;
     const base = p.isReal ? invested : p.startingCash;
     const returnPct = base > 0 ? ((totalValue - base) / base) * 100 : 0;
@@ -57,4 +57,42 @@ export async function portfolioRows(): Promise<PortfolioRow[]> {
 export async function leagueRows(): Promise<PortfolioRow[]> {
   const rows = await portfolioRows();
   return rows.sort((a, b) => b.returnPct - a.returnPct);
+}
+
+export type SnapshotPoint = {
+  date: Date;
+  totalValue: number;
+  returnPct: number;
+  niftyClose: number | null;
+};
+
+/** Daily snapshots for one portfolio, oldest → newest (equity curve data). */
+export async function portfolioSnapshots(portfolioId: number): Promise<SnapshotPoint[]> {
+  const rows = await prisma.portfolioSnapshot.findMany({
+    where: { portfolioId },
+    orderBy: { date: "asc" },
+  });
+  return rows.map((r) => ({
+    date: r.date,
+    totalValue: r.totalValue,
+    returnPct: r.returnPct,
+    niftyClose: r.niftyClose,
+  }));
+}
+
+/** Snapshots for every portfolio at once: portfolioId → points. */
+export async function allSnapshots(): Promise<Map<number, SnapshotPoint[]>> {
+  const rows = await prisma.portfolioSnapshot.findMany({ orderBy: { date: "asc" } });
+  const map = new Map<number, SnapshotPoint[]>();
+  for (const r of rows) {
+    const list = map.get(r.portfolioId) ?? [];
+    list.push({
+      date: r.date,
+      totalValue: r.totalValue,
+      returnPct: r.returnPct,
+      niftyClose: r.niftyClose,
+    });
+    map.set(r.portfolioId, list);
+  }
+  return map;
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "./db";
 import { parseAnalysis } from "./parser";
+import { parseBhavcopyCsv, applyBhavcopy, writeSnapshots } from "./prices";
 
 // All mutations live here as Server Actions. Forms post straight to these.
 
@@ -165,7 +166,30 @@ export async function confirmPaste(formData: FormData) {
   const fixedAmount = parseFloat(String(formData.get("amountPerPick") ?? "10000")) || 10000;
   let cash = portfolio.cash;
 
-  for (const pos of payload.positions as Array<Record<string, unknown>>) {
+  // The preview renders editable fields (pos_<i>_entry etc.) — when they
+  // are present they win over the raw parse payload.
+  const hasPosFields = formData.has("posFields");
+  const rawPositions = payload.positions as Array<Record<string, unknown>>;
+  const mergedPositions = rawPositions.map((pos, i) => {
+    if (!hasPosFields) return pos;
+    const num = (key: string) => {
+      const v = parseFloat(String(formData.get(key) ?? ""));
+      return isNaN(v) ? null : v;
+    };
+    return {
+      ...pos,
+      include: formData.get(`pos_${i}_include`) === "on",
+      entryPrice: num(`pos_${i}_entry`) ?? pos.entryPrice,
+      targetPrice: num(`pos_${i}_target`),
+      exitPrice: num(`pos_${i}_exit`),
+    };
+  });
+  const rawClaims = (payload.claims ?? []) as Array<Record<string, unknown>>;
+  const mergedClaims = rawClaims.map((claim, i) =>
+    hasPosFields ? { ...claim, include: formData.get(`claim_${i}_include`) === "on" } : claim
+  );
+
+  for (const pos of mergedPositions) {
     if (pos.include === false) continue;
     const entryPrice = Number(pos.entryPrice);
     if (!entryPrice) continue;
@@ -184,7 +208,7 @@ export async function confirmPaste(formData: FormData) {
     cash -= fixedAmount;
   }
 
-  for (const claim of (payload.claims ?? []) as Array<Record<string, unknown>>) {
+  for (const claim of mergedClaims) {
     if (claim.include === false) continue;
     await prisma.claim.create({
       data: {
@@ -252,4 +276,36 @@ export async function updateStockClose(formData: FormData) {
   revalidatePath("/my-desk");
   revalidatePath("/league");
   revalidatePath("/portfolios");
+}
+
+/* ---------------- Price pipeline (/admin) ---------------- */
+
+export async function uploadBhavcopy(formData: FormData) {
+  const file = formData.get("file");
+  const dateRaw = String(formData.get("date") ?? "").trim();
+  if (!file || typeof file === "string" || file.size === 0) {
+    redirect("/admin?error=nofile");
+  }
+  const text = await (file as File).text();
+  const parsed = parseBhavcopyCsv(text);
+  if (parsed.kind === "UNKNOWN") {
+    redirect("/admin?error=format");
+  }
+  const res = await applyBhavcopy(parsed, /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : undefined);
+  revalidatePath("/league");
+  revalidatePath("/portfolios");
+  revalidatePath("/my-desk");
+  redirect(
+    `/admin?updated=${res.updated}&date=${res.date}&kind=${res.kind}&snapshots=${res.snapshots}`
+  );
+}
+
+export async function snapshotNow() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  const iso = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const n = await writeSnapshots(iso);
+  revalidatePath("/league");
+  revalidatePath("/portfolios");
+  redirect(`/admin?snapped=${n}&date=${iso}`);
 }

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { leagueRows } from "@/lib/stats";
-import { inr, pct } from "@/lib/format";
+import { prisma } from "@/lib/db";
+import { inr, priceOpt, pct, fmtDate } from "@/lib/format";
+import { VerdictStamp } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,35 @@ export default async function Home() {
   const leader = rows[0];
   const stove = rows.length;
 
+  const nifty = await prisma.stock
+    .findUnique({ where: { symbol: "NIFTY" } })
+    .catch(() => null);
+  const judged = await prisma.claim
+    .findMany({
+      where: { verdict: { not: "ON_THE_STOVE" } },
+      include: { stock: true, source: true },
+      orderBy: { dueDate: "desc" },
+      take: 6,
+    })
+    .catch(() => []);
+  // ROast of the Day: the freshest BURNT / HALF-COOKED verdict; while
+  // nothing has been judged, the claim whose date lands soonest.
+  const roastOfDay =
+    (await prisma.claim
+      .findFirst({
+        where: { verdict: { in: ["BURNT", "HALF_COOKED"] } },
+        include: { stock: true, source: true },
+        orderBy: { dueDate: "desc" },
+      })
+      .catch(() => null)) ??
+    (await prisma.claim
+      .findFirst({
+        where: { verdict: "ON_THE_STOVE" },
+        include: { stock: true, source: true },
+        orderBy: { dueDate: "asc" },
+      })
+      .catch(() => null));
+
   return (
     <div>
       {/* ---------- Hero (Adspace-style: black, glow, giant type) ---------- */}
@@ -37,7 +68,10 @@ export default async function Home() {
           <div className="absolute right-6 top-10 hidden md:block">
             <RotatingBadge />
           </div>
-          <p className="pill border-groww/50 text-groww mb-6">The AI stock-tip accountability league</p>
+          <div className="flex flex-wrap gap-2 mb-6">
+            <p className="pill border-groww/50 text-groww">The AI stock-tip accountability league</p>
+            <p className="pill border-ambery/60 text-ambery">Season 1 · Nov 2026</p>
+          </div>
           <h1 className="font-display font-bold tracking-tight leading-[0.95] text-6xl md:text-8xl max-w-4xl">
             We ROast the tip,{" "}
             <span className="font-accent italic font-normal text-groww">before</span> it burns
@@ -83,7 +117,7 @@ export default async function Home() {
               </div>
               <div className="rounded-xl border border-edge bg-panel/80 p-4">
                 <div className="text-xs uppercase tracking-widest text-muted">Benchmark · NIFTY</div>
-                <div className="font-display text-2xl font-bold mt-1">{inr(24536.6, 2)}</div>
+                <div className="font-display text-2xl font-bold mt-1">{priceOpt(nifty?.lastClose)}</div>
               </div>
             </div>
           )}
@@ -132,6 +166,65 @@ export default async function Home() {
           <span className="stamp text-loss">Roasted</span>
           <span className="stamp text-loss">Burnt</span>
           <span className="stamp text-muted">No recipe</span>
+        </div>
+      </section>
+
+      {/* ---------- ROast of the Day + Receipt Wall ---------- */}
+      <section className="mx-auto max-w-6xl px-4 pb-14">
+        <div className="grid lg:grid-cols-3 gap-4">
+          {roastOfDay && (
+            <div className="rounded-2xl border-2 border-ambery/50 bg-panel p-6">
+              <div className="text-xs uppercase tracking-[0.25em] text-ambery">
+                ROast of the day
+              </div>
+              <div className="flex gap-2 flex-wrap mt-4">
+                <span className="pill">#{roastOfDay.stock.symbol}</span>
+                <span className="pill">{roastOfDay.source.name}</span>
+                <span className="pill">due {fmtDate(roastOfDay.dueDate)}</span>
+              </div>
+              <p className="mt-3 leading-relaxed">{roastOfDay.claimText}</p>
+              <p className="mt-2 text-xs text-muted italic">
+                Receipt: “{roastOfDay.quoteSentence}”
+              </p>
+              <div className="mt-4">
+                <VerdictStamp verdict={roastOfDay.verdict} large />
+              </div>
+            </div>
+          )}
+
+          <div className={`rounded-2xl border border-edge bg-panel p-6 ${roastOfDay ? "lg:col-span-2" : "lg:col-span-3"}`}>
+            <div className="flex items-baseline justify-between gap-3 flex-wrap">
+              <h2 className="font-display text-2xl font-bold">
+                The Receipt <span className="font-accent italic font-normal text-groww">Wall</span>
+              </h2>
+              <Link href="/records" className="text-sm text-groww hover:underline">
+                All records →
+              </Link>
+            </div>
+            {judged.length === 0 ? (
+              <p className="text-muted mt-4 text-sm leading-relaxed">
+                No verdicts on the wall yet — the first claims come off the stove this week.
+                Every judged claim lands here with its stamp, its source and its receipt.
+                Nothing gets quietly deleted; that's the whole point of the wall.
+              </p>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-3 mt-4">
+                {judged.map((c) => (
+                  <div key={c.id} className="rounded-xl border border-edge bg-base p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        <span className="pill">#{c.stock.symbol}</span>
+                        <span className="pill">{c.source.name}</span>
+                      </div>
+                      <VerdictStamp verdict={c.verdict} />
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed">{c.claimText}</p>
+                    <p className="mt-2 text-xs text-muted">due {fmtDate(c.dueDate)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

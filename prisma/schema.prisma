@@ -13,14 +13,17 @@ datasource db {
 }
 
 /// A listed stock (or the NIFTY index, exchange = "INDEX").
-/// lastClose is updated nightly from the exchange bhavcopy (see scripts/prices.README.md).
+/// lastClose/prevClose are updated from the exchange bhavcopy (see
+/// src/lib/prices.ts). They are null for master-loaded stocks that have
+/// never been priced — the UI shows "—" for those.
 model Stock {
-  id        Int      @id @default(autoincrement())
-  symbol    String   @unique
+  id        Int       @id @default(autoincrement())
+  symbol    String    @unique
   name      String
   exchange  String // NSE | BSE | INDEX
-  lastClose Float
-  closeDate DateTime
+  lastClose Float?
+  prevClose Float?
+  closeDate DateTime?
 
   positions Position[]
   orders    Order[]
@@ -52,6 +55,23 @@ model Portfolio {
 
   positions Position[]
   claims    Claim[]
+  snapshots PortfolioSnapshot[]
+}
+
+/// One end-of-day value snapshot per portfolio, written by the price
+/// pipeline (and backfilled for the seed day). Powers the equity curves
+/// and the compare view. niftyClose is the NIFTY close the same day, so
+/// "return vs NIFTY" can be computed over any window.
+model PortfolioSnapshot {
+  id          Int       @id @default(autoincrement())
+  portfolioId Int
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  date        DateTime // the trading day (midnight, local)
+  totalValue  Float // cash + open positions at that day's closes
+  returnPct   Float // vs startingCash (paper) or invested cost (real desk)
+  niftyClose  Float?
+
+  @@unique([portfolioId, date])
 }
 
 /// One position in a portfolio. Fractional units are allowed (paper league).

@@ -22,6 +22,19 @@ export const metadata: Metadata = {
   title: "ROast — We ROast the tip, before it burns your money",
   description:
     "ROast is a stock-tip accountability league. AIs serve picks; we keep score — every claim, dated, receipted and judged.",
+  openGraph: {
+    title: "ROast — We ROast the tip, before it burns your money",
+    description:
+      "The AI stock-tip accountability league. Paste an analysis, we keep the receipts and judge every claim: WELL-DONE, HALF-COOKED, ROASTED or BURNT.",
+    type: "website",
+    siteName: "ROast",
+  },
+  twitter: {
+    card: "summary",
+    title: "ROast — We ROast the tip, before it burns your money",
+    description:
+      "AIs serve picks; we keep score. Every tip on record, every verdict with receipts.",
+  },
 };
 
 const NAV = [
@@ -66,11 +79,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </header>
         <main className="flex-1 w-full">{children}</main>
         <footer className="border-t border-edge/70 mt-16">
-          <div className="mx-auto max-w-6xl px-4 py-6 text-xs text-muted flex flex-wrap gap-3 justify-between">
+          <div className="mx-auto max-w-6xl px-4 py-6 text-xs text-muted flex flex-wrap gap-3 justify-between items-center">
             <span>
               RO<span className="text-groww">ast</span> — every tip on record, every verdict with receipts.
             </span>
-            <span>Paper portfolios only. Not investment advice.</span>
+            <span className="text-cream/80 font-semibold">
+              We don't recommend anything. We only keep score.
+            </span>
+            <span className="flex gap-4 items-center">
+              <Link href="/admin" className="hover:text-groww">
+                Price updates
+              </Link>
+              <span>Paper portfolios only. Not investment advice.</span>
+            </span>
           </div>
         </footer>
       </body>

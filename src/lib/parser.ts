@@ -26,7 +26,20 @@ export type ParseResult = {
   claims: ParsedClaim[];
 };
 
-type StockLite = { id: number; symbol: string; name: string; lastClose: number };
+type StockLite = { id: number; symbol: string; name: string; lastClose: number | null };
+
+/**
+ * Does this sentence name the stock? Full company names match
+ * case-insensitively; symbols must appear as typed (UPPERCASE) — with a
+ * full exchange master loaded, a case-insensitive symbol match would
+ * "detect" stocks from ordinary words (ACE, IDEA, MORE…).
+ */
+function mentions(sentence: string, stock: StockLite): boolean {
+  return (
+    sentence.toLowerCase().includes(stock.name.toLowerCase()) ||
+    new RegExp(`\\b${stock.symbol}\\b`).test(sentence)
+  );
+}
 
 const MONTHS: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
@@ -77,7 +90,7 @@ function amountNear(sentence: string, keywords: string[]): number | null {
 function looksLikeClaim(sentence: string): boolean {
   return (
     /\d/.test(sentence) &&
-    /(results|sales|profit|pat|revenue|order|results on|by|target|nov|dec|jan|feb|q[1-4]|%|crore|cr\b)/i.test(sentence)
+    /(results|sales|profit|pat|revenue|order|results on|by|target|toward|towards|rally|reach|nov|dec|jan|feb|q[1-4]|%|crore|cr\b)/i.test(sentence)
   );
 }
 
@@ -91,23 +104,27 @@ export function parseAnalysis(
 
   // 1) Which stocks are mentioned at all (longest names first to avoid partial hits).
   const mentioned = stocks
-    .filter(
-      (s) =>
-        lower.includes(s.name.toLowerCase()) ||
-        new RegExp(`\\b${s.symbol}\\b`, "i").test(text)
-    )
+    .filter((s) => lower.includes(s.name.toLowerCase()) || mentions(text, s))
     .sort((a, b) => b.name.length - a.name.length);
 
   const positions: ParsedPosition[] = [];
   const claims: ParsedClaim[] = [];
 
+  // Attribute every sentence to the most recently named stock — analyses
+  // (and the Prompt Kit format) put ENTRY / TARGET / EXIT on the lines
+  // AFTER the line that names the stock.
+  const owner: Array<StockLite | undefined> = [];
+  {
+    let cur: StockLite | undefined;
+    for (const s of sentences) {
+      const named = mentioned.find((st) => mentions(s, st));
+      if (named) cur = named;
+      owner.push(cur);
+    }
+  }
+
   for (const stock of mentioned) {
-    const mine = sentences.filter(
-      (s) =>
-        s.toLowerCase().includes(stock.name.toLowerCase()) ||
-        new RegExp(`\\b${stock.symbol}\\b`, "i").test(s)
-    );
-    const context = mine.join(" ");
+    const context = sentences.filter((s, i) => owner[i] === stock).join(" ");
 
     // 2) Intent: default BUY unless sell/exit language dominates the stock's sentences.
     const action: "BUY" | "SELL" =
@@ -117,7 +134,8 @@ export function parseAnalysis(
 
     const entry =
       amountNear(context, ["buy at", "entry", "enter at", "@", "cmp", "around", "near"]) ??
-      stock.lastClose;
+      stock.lastClose ??
+      0; // 0 = no close on record; the preview asks the user to type the entry
     const target = amountNear(context, ["target", "tgt", "upside to", "toward", "towards"]);
     const exit = amountNear(context, ["exit below", "stop", "stoploss", "stop loss", "exit at", "below"]);
 
@@ -140,11 +158,7 @@ export function parseAnalysis(
   const byStock = new Map<number, number>();
   let current: StockLite | undefined;
   for (const s of sentences) {
-    const named = mentioned.find(
-      (st) =>
-        s.toLowerCase().includes(st.name.toLowerCase()) ||
-        new RegExp(`\\b${st.symbol}\\b`, "i").test(s)
-    );
+    const named = mentioned.find((st) => mentions(s, st));
     if (named) current = named;
     if (!current || !looksLikeClaim(s)) continue;
     const count = byStock.get(current.id) ?? 0;

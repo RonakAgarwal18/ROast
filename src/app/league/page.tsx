@@ -1,12 +1,20 @@
 import Link from "next/link";
-import { leagueRows } from "@/lib/stats";
-import { inr, pct } from "@/lib/format";
+import { leagueRows, allSnapshots } from "@/lib/stats";
+import { prisma } from "@/lib/db";
+import { inr, pct, fmtDate } from "@/lib/format";
 import { PageTitle } from "@/components/ui";
+import { Sparkline } from "@/components/Sparkline";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeaguePage() {
   const rows = await leagueRows();
+  const snaps = await allSnapshots();
+  const latest = await prisma.stock.findFirst({
+    where: { closeDate: { not: null } },
+    orderBy: { closeDate: "desc" },
+    select: { closeDate: true },
+  });
   const leader = rows[0];
 
   return (
@@ -14,7 +22,9 @@ export default async function LeaguePage() {
       <PageTitle
         title="The League"
         accent="table"
-        sub="Every portfolio ranked by return. Paper money, real receipts. Prices settle on the last close — as of 5 Nov 2026."
+        sub={`Every portfolio ranked by return. Paper money, real receipts. Prices settle on the last close${
+          latest?.closeDate ? ` — as of ${fmtDate(latest.closeDate)}` : ""
+        }.`}
       />
 
       {/* Morocco-style giant hero number: the leader's return */}
@@ -37,13 +47,20 @@ export default async function LeaguePage() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-edge overflow-hidden">
-        <table className="w-full text-sm">
+      {rows.length === 0 && (
+        <p className="text-muted mb-8">
+          No portfolios yet — open the first kitchen from the Portfolios page.
+        </p>
+      )}
+
+      <div className="rounded-2xl border border-edge overflow-x-auto">
+        <table className="w-full text-sm min-w-[720px]">
           <thead>
             <tr className="bg-panel2 text-left text-muted uppercase text-xs tracking-wider">
               <th className="px-4 py-3">#</th>
               <th className="px-4 py-3">Portfolio</th>
               <th className="px-4 py-3">Source</th>
+              <th className="px-4 py-3">Trend</th>
               <th className="px-4 py-3 text-right">Value</th>
               <th className="px-4 py-3 text-right">Return</th>
               <th className="px-4 py-3 text-right">Well-done claims</th>
@@ -66,6 +83,15 @@ export default async function LeaguePage() {
                 <td className="px-4 py-4">
                   <span className="pill">{r.ownerName}</span>
                   <span className="pill ml-2">{r.ownerKind}</span>
+                </td>
+                <td className="px-4 py-4">
+                  <Sparkline
+                    points={(snaps.get(r.id) ?? []).map((s) => ({
+                      date: s.date,
+                      value: s.totalValue,
+                    }))}
+                    stroke={r.returnPct >= 0 ? "#00D09C" : "#FF6B5E"}
+                  />
                 </td>
                 <td className="px-4 py-4 text-right font-semibold">{inr(r.totalValue)}</td>
                 <td className={`px-4 py-4 text-right font-display font-bold ${r.returnPct >= 0 ? "text-groww" : "text-loss"}`}>

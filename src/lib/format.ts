@@ -14,6 +14,11 @@ export function price(n: number): string {
   return inr(n, 2);
 }
 
+/** Price that may not exist yet (master-loaded stock, never priced). */
+export function priceOpt(n: number | null | undefined): string {
+  return n === null || n === undefined ? "—" : inr(n, 2);
+}
+
 export function pct(n: number): string {
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toFixed(2)}%`;

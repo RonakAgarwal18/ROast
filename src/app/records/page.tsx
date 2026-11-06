@@ -15,6 +15,7 @@ export default async function RecordsPage() {
     include: { stock: true, source: true },
     orderBy: { dueDate: "desc" },
   });
+  const burntBin = judged.filter((c) => c.verdict === "BURNT");
   const sources = await prisma.source.findMany({
     include: { claims: true, portfolios: { include: { positions: true } } },
   });
@@ -43,6 +44,9 @@ export default async function RecordsPage() {
       />
 
       <h2 className="font-display text-2xl font-bold mb-4">Per-source record</h2>
+      {sourceStats.length === 0 && (
+        <p className="text-muted mb-12">No sources on record yet.</p>
+      )}
       <div className="grid md:grid-cols-3 gap-4 mb-12">
         {sourceStats.map((s) => (
           <div key={s.name} className="rounded-2xl border border-edge bg-panel p-5">
@@ -72,6 +76,33 @@ export default async function RecordsPage() {
           </div>
         ))}
       </div>
+
+      <h2 className="font-display text-2xl font-bold mb-4">
+        The Burnt Bin — <span className="font-accent italic font-normal text-loss">hall of fame</span>
+      </h2>
+      {burntBin.length === 0 ? (
+        <p className="text-muted mb-12">
+          The bin is empty — no claim has been BURNT yet. The first claim that goes
+          disastrously the other way gets framed here, permanently.
+        </p>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4 mb-12">
+          {burntBin.map((c) => (
+            <div key={c.id} className="rounded-2xl border-2 border-loss/50 bg-panel p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex gap-2 flex-wrap">
+                  <span className="pill">#{c.stock.symbol}</span>
+                  <span className="pill">{c.source.name}</span>
+                  <span className="pill">due {fmtDate(c.dueDate)}</span>
+                </div>
+                <VerdictStamp verdict={c.verdict} large />
+              </div>
+              <p className="mt-3 text-sm leading-relaxed">{c.claimText}</p>
+              <p className="mt-2 text-xs text-muted italic">Receipt: “{c.quoteSentence}”</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <h2 className="font-display text-2xl font-bold mb-4">Judged claims</h2>
       {judged.length === 0 && (

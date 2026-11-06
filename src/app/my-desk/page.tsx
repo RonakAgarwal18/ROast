@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { inr, price, pct, fmtDate } from "@/lib/format";
+import { inr, price, priceOpt, pct, fmtDate } from "@/lib/format";
 import { addDayNote, updateStockClose } from "@/lib/actions";
 import { PageTitle } from "@/components/ui";
 
@@ -22,21 +22,25 @@ export default async function MyDeskPage() {
 
   const open = real?.positions.filter((p) => p.status === "OPEN") ?? [];
   const invested = open.reduce((s, p) => s + p.units * p.entryPrice, 0);
-  const market = open.reduce((s, p) => s + p.units * p.stock.lastClose, 0);
+  const market = open.reduce((s, p) => s + p.units * (p.stock.lastClose ?? 0), 0);
+  const closesAsOf = open.reduce<Date | null>(
+    (acc, p) => (p.stock.closeDate && (!acc || p.stock.closeDate > acc) ? p.stock.closeDate : acc),
+    null
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <PageTitle
         title="My Desk"
         accent="real money"
-        sub={`Ronak's actual holdings, mirrored into the league. Invested ${inr(invested)} · now ${inr(market)} · closes as of 5 Nov 2026.`}
+        sub={`Ronak's actual holdings, mirrored into the league. Invested ${inr(invested)} · now ${inr(market)} · closes as of ${closesAsOf ? fmtDate(closesAsOf) : "—"}.`}
       />
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Holdings + pending order */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-2xl border border-edge overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-2xl border border-edge overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="bg-panel2 text-left text-muted uppercase text-xs tracking-wider">
                   <th className="px-4 py-3">Holding</th>
@@ -48,8 +52,14 @@ export default async function MyDeskPage() {
               </thead>
               <tbody>
                 {open.map((p) => {
-                  const pnl = (p.stock.lastClose - p.entryPrice) * p.units;
-                  const pnlPct = ((p.stock.lastClose - p.entryPrice) / p.entryPrice) * 100;
+                  const pnl =
+                    p.stock.lastClose !== null
+                      ? (p.stock.lastClose - p.entryPrice) * p.units
+                      : null;
+                  const pnlPct =
+                    p.stock.lastClose !== null
+                      ? ((p.stock.lastClose - p.entryPrice) / p.entryPrice) * 100
+                      : null;
                   return (
                     <tr key={p.id} className="border-t border-edge/60 bg-panel">
                       <td className="px-4 py-3">
@@ -67,24 +77,41 @@ export default async function MyDeskPage() {
                             name="lastClose"
                             type="number"
                             step="any"
-                            defaultValue={p.stock.lastClose}
+                            defaultValue={p.stock.lastClose ?? ""}
+                            placeholder={priceOpt(p.stock.lastClose)}
                             className="w-24 rounded-md border border-edge bg-base px-2 py-1 text-right text-sm"
                             title="Quick-update the close"
                           />
                           <button className="pill hover:bg-panel2 cursor-pointer">set</button>
                         </form>
                       </td>
-                      <td className={`px-4 py-3 text-right font-display font-bold ${pnl >= 0 ? "text-groww" : "text-loss"}`}>
-                        {inr(pnl)} <span className="text-xs">({pct(pnlPct)})</span>
+                      <td
+                        className={`px-4 py-3 text-right font-display font-bold ${
+                          pnl === null ? "text-muted" : pnl >= 0 ? "text-groww" : "text-loss"
+                        }`}
+                      >
+                        {pnl === null ? "—" : <>{inr(pnl)} <span className="text-xs">({pct(pnlPct ?? 0)})</span></>}
                       </td>
                     </tr>
                   );
                 })}
+                {open.length === 0 && (
+                  <tr className="border-t border-edge/60 bg-panel">
+                    <td colSpan={5} className="px-4 py-6 text-muted">
+                      No real holdings on the desk right now.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
 
           {/* Pending orders */}
+          {orders.length === 0 && (
+            <div className="rounded-2xl border border-edge bg-panel p-5 text-sm text-muted">
+              No pending orders on the desk.
+            </div>
+          )}
           {orders.map((o) => (
             <div key={o.id} className="rounded-2xl border border-ambery/50 bg-panel p-5">
               <div className="flex items-center gap-2 flex-wrap">
@@ -117,6 +144,7 @@ export default async function MyDeskPage() {
               </button>
             </form>
             <ul className="space-y-2 text-sm">
+              {notes.length === 0 && <li className="text-muted">No notes yet — the first line above starts the journal.</li>}
               {notes.map((n) => (
                 <li key={n.id} className="flex gap-3">
                   <span className="pill shrink-0">{fmtDate(n.date)}</span>

@@ -24,6 +24,33 @@ CLAIMS:
 
 Rules: every claim must be falsifiable (a number, a date, or a named event). If you cannot name a catalyst and a key date, do not include the stock. End with one line: BIGGEST RISK: <what kills this set of picks>.`;
 
+const QUICK_TAKE_PROMPT = `Give me your single best stock idea for the Indian market (NSE/BSE) right now, in exactly this format:
+
+STOCK: <full company name> (<NSE symbol>)
+ACTION: BUY
+ENTRY: ₹<current price>
+TARGET: ₹<target>
+EXIT: ₹<price where the idea is wrong>
+KEY DATE: <the date that decides it>
+CLAIM: <one falsifiable sentence with a number or a date>
+
+One stock only. If you cannot name a key date, say "NO CONVICTION" and stop.`;
+
+const DEEP_DIVE_PROMPT = `Do a deep dive on ONE Indian listed company I name. Structure your answer exactly like this:
+
+STOCK: <full company name> (<NSE symbol>)
+THESIS: <two sentences, no adjectives without numbers>
+ENTRY: ₹<price> · TARGET: ₹<price> · EXIT: ₹<price>
+CATALYST: <the event that moves it> — lands on <date>
+CLAIMS:
+- <claim 1: a number that must print, and by when>
+- <claim 2: a dated event and what must happen at it>
+- <claim 3: a price or valuation level that proves the thesis>
+RISKS:
+- <the specific thing that makes this BURNT, not just wrong>
+
+Every claim needs a number or a date. Vague claims ("strong growth expected") will be stamped NO RECIPE.`;
+
 type Draft = {
   draft?: string;
   sourceName?: string;
@@ -92,6 +119,7 @@ export default async function AddPage({
 
           <input type="hidden" name="sourceName" value={sp.sourceName ?? ""} />
           <input type="hidden" name="text" value={sp.text ?? ""} />
+          <input type="hidden" name="posFields" value="1" />
           <input
             type="hidden"
             name="payload"
@@ -111,14 +139,55 @@ export default async function AddPage({
           <div className="space-y-2">
             {parsed.positions.map((p, i) => (
               <div key={i} className="flex flex-wrap items-center gap-3 rounded-lg border border-edge bg-base px-3 py-2 text-sm">
-                <span className="pill border-groww/60 text-groww">{p.action}</span>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name={`pos_${i}_include`}
+                    defaultChecked
+                    className="accent-[#00D09C] w-4 h-4"
+                  />
+                  <span className="pill border-groww/60 text-groww">{p.action}</span>
+                </label>
                 <span className="font-semibold">{p.name}</span>
                 <span className="pill">#{p.symbol}</span>
-                <span className="text-muted">
-                  entry {price(p.entryPrice)}
-                  {p.targetPrice ? ` · target ${price(p.targetPrice)}` : ""}
-                  {p.exitPrice ? ` · exit ${price(p.exitPrice)}` : ""}
-                </span>
+                <label className="inline-flex items-center gap-1 text-muted text-xs">
+                  entry ₹
+                  <input
+                    name={`pos_${i}_entry`}
+                    type="number"
+                    step="any"
+                    defaultValue={p.entryPrice || ""}
+                    placeholder="entry"
+                    className={`${inputCls} w-28 !py-1`}
+                  />
+                </label>
+                <label className="inline-flex items-center gap-1 text-muted text-xs">
+                  target ₹
+                  <input
+                    name={`pos_${i}_target`}
+                    type="number"
+                    step="any"
+                    defaultValue={p.targetPrice ?? ""}
+                    placeholder="—"
+                    className={`${inputCls} w-24 !py-1`}
+                  />
+                </label>
+                <label className="inline-flex items-center gap-1 text-muted text-xs">
+                  exit ₹
+                  <input
+                    name={`pos_${i}_exit`}
+                    type="number"
+                    step="any"
+                    defaultValue={p.exitPrice ?? ""}
+                    placeholder="—"
+                    className={`${inputCls} w-24 !py-1`}
+                  />
+                </label>
+                {p.entryPrice === 0 && (
+                  <span className="text-xs text-ambery">
+                    no close on record — type the entry price
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -128,10 +197,18 @@ export default async function AddPage({
           </h3>
           <div className="space-y-2">
             {parsed.claims.map((c, i) => (
-              <div key={i} className="rounded-lg border border-edge bg-base px-3 py-2 text-sm">
-                <span className="pill mr-2">#{c.symbol}</span>
-                <span className="pill mr-2">due {c.dueDate}</span>
-                {c.claimText}
+              <div key={i} className="flex items-start gap-2 rounded-lg border border-edge bg-base px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  name={`claim_${i}_include`}
+                  defaultChecked
+                  className="accent-[#00D09C] w-4 h-4 mt-0.5 shrink-0"
+                />
+                <span>
+                  <span className="pill mr-2">#{c.symbol}</span>
+                  <span className="pill mr-2">due {c.dueDate}</span>
+                  {c.claimText}
+                </span>
               </div>
             ))}
             {parsed.claims.length === 0 && (
@@ -165,22 +242,47 @@ export default async function AddPage({
       )}
 
       {/* ---------- Prompt Kit ---------- */}
-      <section className="rounded-2xl border border-edge bg-panel p-5">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="font-display text-2xl font-bold">
-            The Prompt <span className="font-accent italic font-normal text-groww">Kit</span>
-          </h2>
-          <CopyButton text={PROMPT_KIT} />
-        </div>
+      <section>
+        <h2 className="font-display text-2xl font-bold">
+          The Prompt <span className="font-accent italic font-normal text-groww">Kit</span>
+        </h2>
         <p className="text-sm text-muted mt-2 max-w-3xl">
-          Optional, never compulsory: paste this into your AI <em>before</em> asking for picks.
-          The AI answers in our format, and the parser above reads it almost perfectly —
-          every pick arrives with an entry, a target, an exit, a catalyst and dated claims.
+          Optional, never compulsory: paste one of these into your AI <em>before</em> asking
+          for picks. The AI answers in our format, and the parser above reads it almost
+          perfectly — every pick arrives with an entry, a target, an exit, a catalyst and
+          dated claims.
         </p>
-        <pre className="mt-4 whitespace-pre-wrap rounded-lg border border-edge bg-base p-4 text-[13px] leading-relaxed text-cream/90 font-mono">
-          {PROMPT_KIT}
-        </pre>
-        <p className="text-xs text-muted mt-3">
+
+        {[
+          {
+            name: "The Standard",
+            blurb: "A full set of picks, each with entry, target, exit, catalyst and dated claims. The default kit.",
+            text: PROMPT_KIT,
+          },
+          {
+            name: "Quick Take",
+            blurb: "One stock, one claim, one deciding date. For when you just want today's best idea, scored.",
+            text: QUICK_TAKE_PROMPT,
+          },
+          {
+            name: "Deep Dive",
+            blurb: "A single-name thesis with three checkable claims and named risks. The strictest kit — built to earn WELL-DONE or get BURNT.",
+            text: DEEP_DIVE_PROMPT,
+          },
+        ].map((kit) => (
+          <div key={kit.name} className="rounded-2xl border border-edge bg-panel p-5 mt-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h3 className="font-display text-xl font-bold">{kit.name}</h3>
+              <CopyButton text={kit.text} />
+            </div>
+            <p className="text-sm text-muted mt-1">{kit.blurb}</p>
+            <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-edge bg-base p-4 text-[13px] leading-relaxed text-cream/90 font-mono">
+              {kit.text}
+            </pre>
+          </div>
+        ))}
+
+        <p className="text-xs text-muted mt-4">
           Manual instead? Add positions one by one from any portfolio page — the paste box is
           the headline, not the only door.
         </p>

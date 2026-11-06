@@ -30,6 +30,7 @@ export default async function CalendarPage() {
       />
 
       <h2 className="font-display text-2xl font-bold mb-4">Catalysts</h2>
+      {events.length === 0 && <p className="text-muted mb-12">No catalysts on the calendar yet.</p>}
       <div className="space-y-3 mb-12">
         {events.map((e) => (
           <div key={e.id} className="flex items-center gap-4 rounded-2xl border border-edge bg-panel p-4">
@@ -46,6 +47,7 @@ export default async function CalendarPage() {
       </div>
 
       <h2 className="font-display text-2xl font-bold mb-4">Verdict days</h2>
+      {claims.length === 0 && <p className="text-muted">No claims being tracked yet — verdict days appear here once an analysis is pasted.</p>}
       <div className="space-y-3">
         {claims.map((c) => (
           <div key={c.id} className="flex items-center gap-4 rounded-2xl border border-edge bg-panel p-4">

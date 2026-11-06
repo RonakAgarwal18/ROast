@@ -20,6 +20,15 @@ export default async function PortfoliosPage() {
         sub="One paper kitchen per source. Name it, fund it with any virtual amount, and let its record speak."
       />
 
+      <div className="mb-6">
+        <Link
+          href="/portfolios/compare"
+          className="pill border-groww/60 text-groww hover:bg-groww-dim !py-1.5 !px-4 text-sm"
+        >
+          ⚖ Compare portfolios side by side →
+        </Link>
+      </div>
+
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {rows.map((r) => (
           <Link
