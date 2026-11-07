@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { uploadBhavcopy, snapshotNow } from "@/lib/actions";
+import { getOwnerSession } from "@/lib/auth";
 import { PageTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,9 @@ export default async function AdminPage({
   searchParams: Promise<SP>;
 }) {
   const sp = await searchParams;
+  // Owner-only (the proxy also gates /admin; this is the server-side
+  // check that holds even if the proxy is bypassed).
+  if (!(await getOwnerSession())) redirect("/login?next=/admin");
   const [total, priced, latestClose, snapshotCount, lastSnap] = await Promise.all([
     prisma.stock.count(),
     prisma.stock.count({ where: { lastClose: { not: null } } }),

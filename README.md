@@ -69,6 +69,9 @@ BURNT claims are framed permanently in the Burnt Bin on the Records page.
   files, with daily per-portfolio snapshots. See below.
 - **Landing page** — live league snapshot, the Receipt Wall (latest judged
   claims), and ROast of the Day.
+- **Owner login** — the league is public to read; every write (serving a
+  paste, judging a claim, editing the desk, the price admin) requires the
+  owner's login. See *Owner login* below.
 
 ## Tech stack
 
@@ -100,8 +103,10 @@ npx tsx scripts/update-prices.ts       # latest closes + daily snapshots
 
 The seed data is a real evening (5 Nov 2026): Gemini's 7 picks as a ₹1L
 paper portfolio at ₹10,000 per pick, Hanu's Nykaa call, the owner's real
-holdings (Groww, Ather, Premier Energies, Stallion, and Nykaa — the limit
-order placed that evening filled the next morning, 6 Nov, @ ₹350.00),
+holdings (Groww, Ather, Stallion, and Nykaa — the limit order placed that
+evening filled the next morning, 6 Nov, @ ₹350.00 — plus Premier Energies,
+which the owner sold on 6 Nov @ ~₹874 and which therefore sits in Records
+as a closed trade, its ~₹5,209 net proceeds held as desk cash),
 5 dated claims, the catalyst calendar, and a baseline portfolio
 snapshot for that day.
 
@@ -110,23 +115,65 @@ snapshot for that day.
 ```
 src/
   app/            pages: landing, league, portfolios (+ [id], compare),
-                  add, checklists, calendar, my-desk, records, admin
+                  add, checklists, calendar, my-desk, records, admin, login
   components/     shared UI (verdict stamps, date blocks, SVG equity curves)
   lib/
-    actions.ts    all mutations (Server Actions)
+    actions.ts    all mutations (Server Actions — every one owner-gated)
+    auth.ts       owner session checks (server side)
+    session.ts    scrypt password hashes + HMAC session tokens (no deps)
     parser.ts     the rule-based paste parser
     prices.ts     the price pipeline (bhavcopy parsing + apply + snapshots)
     stats.ts      portfolio maths + snapshot readers
     verdicts.ts   the kitchen scale vocabulary
     format.ts     ₹ / % / date formatting (Indian digit grouping)
+  proxy.ts        gates /admin to the owner (Next 16's middleware)
 prisma/
   schema.prisma   data model
   seed.ts         the 5 Nov 2026 seed league
 scripts/
   update-prices.ts      nightly bhavcopy download + apply
   load-stock-master.ts  official NSE/BSE company lists -> Stock table
+  hash-password.ts      generate OWNER_PASSWORD_HASH + AUTH_SECRET
   prices.README.md      pipeline design notes
 ```
+
+## Owner login
+
+ROast has exactly one privileged user: the owner. Reading is public —
+landing, league, portfolios, checklists, calendar and records need no
+login. **Every write path requires the owner session**: the `/admin`
+price page (gated by `src/proxy.ts` and re-checked in the page), the
+Add Analysis confirm, portfolio create/edit/close, checklist verdicts
+and tick-boxes, and the My Desk edits. Each server action checks the
+session itself, so the gate does not depend on the proxy.
+
+How it works: credentials live in env vars, never in the database or the
+repo. The password is stored only as a **scrypt hash**; the session is
+an HMAC-SHA256-signed token in an httpOnly cookie (30 days), signed with
+`AUTH_SECRET`. No auth library, no extra dependency — Node's built-in
+crypto (see `src/lib/session.ts`). If the env vars are not set, login
+simply fails closed: nobody can sign in, reading still works.
+
+Setup (local, one time):
+
+```bash
+npx tsx scripts/hash-password.ts   # prompts for a password, prints the
+                                   # OWNER_PASSWORD_HASH and a fresh
+                                   # AUTH_SECRET — paste both into .env
+# …and add:  OWNER_EMAIL=<the login email>
+```
+
+Sign in at `/login`; the footer switches to "Owner logout" while a
+session is active.
+
+**Env vars the app reads** (all of them — set every one at deploy time):
+
+| Var | Purpose |
+|---|---|
+| `DATABASE_URL` | SQLite file locally; the Neon Postgres URL at deploy |
+| `OWNER_EMAIL` | The owner's login email |
+| `OWNER_PASSWORD_HASH` | scrypt hash from `scripts/hash-password.ts` — never the plain password |
+| `AUTH_SECRET` | Random secret that signs session cookies (rotating it logs everyone out) |
 
 ## How the price pipeline works
 
@@ -155,6 +202,15 @@ from the latest BSE bhavcopy. Existing rows are never overwritten, so
 seeded names and recorded closes survive a refresh. New stocks start
 unpriced and display "—" until the pipeline prices them.
 
+**Measured (Round 4, live re-run on the real 6 Nov 2026 files):** the
+batched write path applies a full master in seconds — the BSE UDiFF file
+(4,722 stocks updated) applied in ~3.0s and the NSE bhavcopy (2,842
+stocks) in ~1.7s, snapshots included, against ~10 minutes for the old
+one-round-trip-per-stock version. Per-leg timings are printed by
+`scripts/update-prices.ts` on every run. (On networks where the exchange
+download hosts refuse the connection, the same files can be fed through
+the script's `--file` mode or the `/admin` upload — identical code path.)
+
 ## Scoring rules
 
 - A portfolio's return is computed from its positions' entry prices
@@ -173,8 +229,6 @@ unpriced and display "—" until the pipeline prices them.
 
 Honest list of what is **not** built yet:
 
-- Owner login / auth (the app is currently single-user; editing is
-  owner-side by design)
 - Deployment wiring (Neon Postgres + Vercel) — the schema and env switch
   are ready, the accounts and deploy are not done
 - Fully automatic scheduling of the nightly job (the script runs today;

@@ -43,3 +43,6 @@ next-env.d.ts
 # prisma local sqlite db
 /prisma/*.db
 /prisma/*.db-journal
+
+# the example env is safe to share
+!.env.example

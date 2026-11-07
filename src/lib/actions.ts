@@ -1,12 +1,52 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "./db";
 import { parseAnalysis } from "./parser";
 import { parseBhavcopyCsv, applyBhavcopy, writeSnapshots } from "./prices";
+import { requireOwner, verifyCredentials, SESSION_COOKIE } from "./auth";
+import { createSessionToken } from "./session";
 
 // All mutations live here as Server Actions. Forms post straight to these.
+// EVERY action below is owner-only: public read stays open, but writes
+// require the owner session (requireOwner redirects to /login when
+// logged out). The checks live here, server-side — the /admin proxy
+// gate is only a convenience on top.
+
+/* ---------------- Owner login ---------------- */
+
+export async function login(formData: FormData) {
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const nextRaw = String(formData.get("next") ?? "/admin");
+  const next = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/admin";
+
+  if (!verifyCredentials(email, password)) {
+    redirect(`/login?error=1&next=${encodeURIComponent(next)}`);
+  }
+  const token = createSessionToken(email.trim().toLowerCase());
+  if (!token) {
+    // AUTH_SECRET not configured — login cannot work; fail closed.
+    redirect(`/login?error=config&next=${encodeURIComponent(next)}`);
+  }
+  const store = await cookies();
+  store.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+    secure: process.env.NODE_ENV === "production",
+  });
+  redirect(next);
+}
+
+export async function logout() {
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+  redirect("/");
+}
 
 async function getOrCreateSource(name: string, kind: string) {
   const clean = name.trim();
@@ -20,6 +60,7 @@ async function getOrCreateSource(name: string, kind: string) {
 /* ---------------- Portfolios ---------------- */
 
 export async function createPortfolio(formData: FormData) {
+  await requireOwner();
   const name = String(formData.get("name") ?? "").trim();
   const ownerName = String(formData.get("owner") ?? "").trim();
   const ownerKind = String(formData.get("ownerKind") ?? "AI");
@@ -44,6 +85,7 @@ export async function createPortfolio(formData: FormData) {
 /* ---------------- Positions ---------------- */
 
 export async function addPosition(formData: FormData) {
+  await requireOwner();
   const portfolioId = parseInt(String(formData.get("portfolioId")), 10);
   const stockId = parseInt(String(formData.get("stockId")), 10);
   const entryPrice = parseFloat(String(formData.get("entryPrice")));
@@ -87,6 +129,7 @@ export async function addPosition(formData: FormData) {
 }
 
 export async function closePosition(formData: FormData) {
+  await requireOwner();
   const positionId = parseInt(String(formData.get("positionId")), 10);
   const sellPrice = parseFloat(String(formData.get("sellPrice")));
   if (!positionId || !sellPrice) return;
@@ -115,6 +158,7 @@ export async function closePosition(formData: FormData) {
 /* ---------------- Add Analysis (paste → parse → confirm) ---------------- */
 
 export async function parsePaste(formData: FormData) {
+  await requireOwner();
   const text = String(formData.get("text") ?? "");
   const sourceName = String(formData.get("sourceName") ?? "").trim();
   const stocks = await prisma.stock.findMany({
@@ -130,6 +174,7 @@ export async function parsePaste(formData: FormData) {
 }
 
 export async function confirmPaste(formData: FormData) {
+  await requireOwner();
   const sourceName = String(formData.get("sourceName") ?? "").trim();
   const sourceKind = String(formData.get("sourceKind") ?? "AI");
   const text = String(formData.get("text") ?? "");
@@ -236,6 +281,7 @@ export async function confirmPaste(formData: FormData) {
 /* ---------------- Checklists ---------------- */
 
 export async function setVerdict(formData: FormData) {
+  await requireOwner();
   const claimId = parseInt(String(formData.get("claimId")), 10);
   const verdict = String(formData.get("verdict"));
   if (!claimId || !verdict) return;
@@ -246,6 +292,7 @@ export async function setVerdict(formData: FormData) {
 }
 
 export async function cycleItemState(formData: FormData) {
+  await requireOwner();
   const itemId = parseInt(String(formData.get("itemId")), 10);
   if (!itemId) return;
   const item = await prisma.claimItem.findUnique({ where: { id: itemId } });
@@ -259,6 +306,7 @@ export async function cycleItemState(formData: FormData) {
 /* ---------------- My Desk ---------------- */
 
 export async function addDayNote(formData: FormData) {
+  await requireOwner();
   const text = String(formData.get("text") ?? "").trim();
   if (!text) return;
   await prisma.dayNote.create({ data: { date: new Date(), text } });
@@ -266,6 +314,7 @@ export async function addDayNote(formData: FormData) {
 }
 
 export async function updateStockClose(formData: FormData) {
+  await requireOwner();
   const stockId = parseInt(String(formData.get("stockId")), 10);
   const close = parseFloat(String(formData.get("lastClose")));
   if (!stockId || !close) return;
@@ -281,6 +330,7 @@ export async function updateStockClose(formData: FormData) {
 /* ---------------- Price pipeline (/admin) ---------------- */
 
 export async function uploadBhavcopy(formData: FormData) {
+  await requireOwner();
   const file = formData.get("file");
   const dateRaw = String(formData.get("date") ?? "").trim();
   if (!file || typeof file === "string" || file.size === 0) {
@@ -301,6 +351,7 @@ export async function uploadBhavcopy(formData: FormData) {
 }
 
 export async function snapshotNow() {
+  await requireOwner();
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
   const iso = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;

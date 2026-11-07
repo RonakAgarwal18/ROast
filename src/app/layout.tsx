@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Space_Grotesk, Inter, Instrument_Serif } from "next/font/google";
+import { getOwnerSession } from "@/lib/auth";
+import { logout } from "@/lib/actions";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -47,7 +49,8 @@ const NAV = [
   { href: "/records", label: "Records" },
 ];
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const owner = await getOwnerSession();
   return (
     <html
       lang="en"
@@ -90,6 +93,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/admin" className="hover:text-groww">
                 Price updates
               </Link>
+              {owner ? (
+                <form action={logout} className="inline-flex">
+                  <button className="hover:text-groww cursor-pointer">Owner logout</button>
+                </form>
+              ) : (
+                <Link href="/login" className="hover:text-groww">
+                  Owner login
+                </Link>
+              )}
               <span>Paper portfolios only. Not investment advice.</span>
             </span>
           </div>
