@@ -1,15 +1,16 @@
 // ROast — data model
-// v1 runs on SQLite (zero-config file DB) so the app boots anywhere.
-// To deploy on PostgreSQL (Neon): change `provider` to "postgresql" and point
-// DATABASE_URL at Neon — no model changes needed.
+// Production runs on PostgreSQL (Neon). DATABASE_URL is the pooled
+// connection; DIRECT_URL is the direct connection Prisma CLI uses for
+// db push / migrations (PgBouncer pooling breaks those over the pooled URL).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 /// A listed stock (or the NIFTY index, exchange = "INDEX").
