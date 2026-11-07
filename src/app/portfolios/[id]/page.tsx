@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { portfolioSnapshots } from "@/lib/stats";
 import { inr, price, priceOpt, pct, fmtDate } from "@/lib/format";
-import { addPosition, closePosition } from "@/lib/actions";
+import { addPosition, closePosition, updatePosition, deletePosition } from "@/lib/actions";
 import { PageTitle, VerdictStamp } from "@/components/ui";
 import { EquityChart } from "@/components/Sparkline";
 
@@ -199,6 +199,80 @@ export default async function PortfolioDetail({
           price this portfolio is scored on.
         </p>
       </form>
+
+      {/* Fix-it: correct any position's record (owner-only actions) */}
+      {portfolio.positions.length > 0 && (
+        <div className="mb-10">
+          <h2 className="font-display text-2xl font-bold mb-4">Fix a position</h2>
+          <div className="space-y-3">
+            {portfolio.positions.map((p) => (
+              <details key={p.id} className="rounded-2xl border border-edge bg-panel px-5 py-3">
+                <summary className="cursor-pointer text-sm font-semibold">
+                  {p.stock.name} <span className="text-muted font-normal">#{p.stock.symbol} · {p.status} · {p.units.toFixed(2)} units @ {price(p.entryPrice)} · in {fmtDate(p.entryDate)}</span>
+                </summary>
+                <form action={updatePosition} className="mt-4 flex flex-wrap gap-3 items-end">
+                  <input type="hidden" name="positionId" value={p.id} />
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Units
+                    <input name="units" type="number" step="any" defaultValue={p.units} className={`${inputCls} w-28`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Entry ₹
+                    <input name="entryPrice" type="number" step="any" defaultValue={p.entryPrice} className={`${inputCls} w-28`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Entry date
+                    <input name="entryDate" type="date" defaultValue={p.entryDate.toISOString().slice(0, 10)} className={`${inputCls} w-40`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Target ₹
+                    <input name="targetPrice" type="number" step="any" defaultValue={p.targetPrice ?? ""} className={`${inputCls} w-24`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Exit ₹
+                    <input name="exitPrice" type="number" step="any" defaultValue={p.exitPrice ?? ""} className={`${inputCls} w-24`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Status
+                    <select name="status" defaultValue={p.status} className={`${inputCls} w-28`}>
+                      <option value="OPEN">OPEN</option>
+                      <option value="CLOSED">CLOSED</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Sell ₹ (if closed)
+                    <input name="sellPrice" type="number" step="any" defaultValue={p.sellPrice ?? ""} className={`${inputCls} w-28`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Sell date
+                    <input name="sellDate" type="date" defaultValue={p.sellDate ? p.sellDate.toISOString().slice(0, 10) : ""} className={`${inputCls} w-40`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Tag
+                    <input name="tag" defaultValue={p.tag ?? ""} className={`${inputCls} w-32`} />
+                  </label>
+                  <button className="rounded-full bg-groww text-black font-display font-bold px-5 py-2 hover:brightness-110 cursor-pointer">
+                    Save fix
+                  </button>
+                </form>
+                <form action={deletePosition} className="mt-3">
+                  <input type="hidden" name="positionId" value={p.id} />
+                  <details>
+                    <summary className="cursor-pointer text-xs text-loss">Delete this position…</summary>
+                    <button className="mt-2 pill border-loss/60 text-loss hover:bg-panel2 cursor-pointer">
+                      Yes, delete it and reconcile the cash
+                    </button>
+                  </details>
+                </form>
+              </details>
+            ))}
+          </div>
+          <p className="text-xs text-muted mt-2">
+            Paper portfolios: cash rebalances by the difference automatically. The real
+            portfolio's cash is yours to track, so it is left untouched.
+          </p>
+        </div>
+      )}
 
       {/* Claims attached to this portfolio */}
       {portfolio.claims.length > 0 && (

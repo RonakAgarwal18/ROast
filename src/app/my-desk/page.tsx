@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { inr, price, priceOpt, pct, fmtDate } from "@/lib/format";
-import { addDayNote, updateStockClose } from "@/lib/actions";
+import { addDayNote, updateStockClose, updateOrder, deleteOrder } from "@/lib/actions";
 import { PageTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +131,53 @@ export default async function MyDeskPage() {
                 Fills only if the stock trades at or below the limit. Above ~₹365 the plan is to
                 re-think, not chase.
               </p>
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs text-muted">Fix this order…</summary>
+                <form action={updateOrder} className="mt-3 flex flex-wrap gap-3 items-end">
+                  <input type="hidden" name="orderId" value={o.id} />
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Qty
+                    <input name="qty" type="number" step="any" defaultValue={o.qty} className={`${inputCls} w-24`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Limit ₹
+                    <input name="limitPrice" type="number" step="any" defaultValue={o.limitPrice} className={`${inputCls} w-28`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Target low ₹
+                    <input name="targetLow" type="number" step="any" defaultValue={o.targetLow ?? ""} className={`${inputCls} w-28`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Target high ₹
+                    <input name="targetHigh" type="number" step="any" defaultValue={o.targetHigh ?? ""} className={`${inputCls} w-28`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Exit ₹
+                    <input name="exitPrice" type="number" step="any" defaultValue={o.exitPrice ?? ""} className={`${inputCls} w-24`} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    Status
+                    <select name="status" defaultValue={o.status} className={`${inputCls} w-32`}>
+                      <option value="PLACED">PLACED</option>
+                      <option value="FILLED">FILLED</option>
+                      <option value="CANCELLED">CANCELLED</option>
+                      <option value="EXPIRED">EXPIRED</option>
+                    </select>
+                  </label>
+                  <button className="rounded-full bg-groww text-black font-display font-bold px-5 py-2 hover:brightness-110 cursor-pointer">
+                    Save fix
+                  </button>
+                </form>
+                <form action={deleteOrder} className="mt-3">
+                  <input type="hidden" name="orderId" value={o.id} />
+                  <details>
+                    <summary className="cursor-pointer text-xs text-loss">Delete this order…</summary>
+                    <button className="mt-2 pill border-loss/60 text-loss hover:bg-panel2 cursor-pointer">
+                      Yes, delete it
+                    </button>
+                  </details>
+                </form>
+              </details>
             </div>
           ))}
 

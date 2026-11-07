@@ -180,3 +180,18 @@ model Rule {
   id   Int    @id @default(autoincrement())
   text String
 }
+
+/// One execution of the price pipeline (nightly cron, admin "run now",
+/// admin bhavcopy upload, or the CLI script). Powers the /admin
+/// freshness panel: when prices last moved, from where, and whether
+/// anything is stale.
+model PriceRun {
+  id        Int       @id @default(autoincrement())
+  ranAt     DateTime  @default(now())
+  source    String // CRON | ADMIN | ADMIN_UPLOAD | SCRIPT
+  status    String // OK | NO_FILE | ERROR
+  tradeDate DateTime?
+  updated   Int       @default(0)
+  snapshots Int       @default(0)
+  message   String?
+}
