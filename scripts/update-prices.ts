@@ -46,7 +46,10 @@ async function fetchText(url: string): Promise<string | null> {
   }
 }
 
+const secs = (t0: number) => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+
 async function main() {
+  const runStart = Date.now();
   const args = process.argv.slice(2);
   const fileIdx = args.indexOf("--file");
   const dateIdx = args.indexOf("--date");
@@ -61,9 +64,10 @@ async function main() {
       console.error(`Could not recognise the bhavcopy format of ${path}.`);
       process.exit(1);
     }
+    const applyT = Date.now();
     const res = await applyBhavcopy(parsed, dateArg);
     console.log(
-      `${path}: ${res.kind} file → ${res.updated} stocks updated for ${res.date}, ${res.snapshots} snapshots written.`
+      `${path}: ${res.kind} file → ${res.updated} stocks updated for ${res.date}, ${res.snapshots} snapshots written. (apply ${secs(applyT)}, total ${secs(runStart)})`
     );
     return;
   }
@@ -93,16 +97,18 @@ async function main() {
     if (bseText) {
       const bseParsed = parseBhavcopyCsv(bseText);
       if (bseParsed.kind !== "UNKNOWN") {
+        const bseT = Date.now();
         const bseRes = await applyBhavcopy(bseParsed, iso);
-        console.log(`BSE ${iso}: ${bseRes.updated} stocks updated (gap-fill; NSE overwrites dual-listed). (${bseUrl})`);
+        console.log(`BSE ${iso}: ${bseRes.updated} stocks updated (gap-fill; NSE overwrites dual-listed). (apply ${secs(bseT)}) (${bseUrl})`);
       }
     } else {
       console.log(`BSE ${iso}: file not reachable — skipped.`);
     }
 
+    const nseT = Date.now();
     const nseRes = await applyBhavcopy(nseParsed, iso);
     console.log(
-      `NSE ${iso}: ${nseRes.updated} stocks updated, ${nseRes.snapshots} snapshots written. (${nseUrl})`
+      `NSE ${iso}: ${nseRes.updated} stocks updated, ${nseRes.snapshots} snapshots written. (apply incl. snapshots ${secs(nseT)}) (${nseUrl})`
     );
     nseApplied = true;
 
@@ -119,6 +125,8 @@ async function main() {
       console.log(`NIFTY ${iso}: index file not reachable — skipped.`);
     }
   }
+
+  console.log(`Done. Total wall-clock: ${secs(runStart)}.`);
 
   if (!nseApplied) {
     console.error(

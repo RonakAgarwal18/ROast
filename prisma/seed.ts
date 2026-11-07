@@ -33,7 +33,7 @@ async function main() {
     { symbol: "DEVYANI", name: "Devyani International", exchange: "NSE", lastClose: 129.21 },
     { symbol: "NYKAA", name: "Nykaa", exchange: "NSE", lastClose: 350.3 },
     { symbol: "GROWW", name: "Groww (Billionbrains)", exchange: "NSE", lastClose: 223.89 },
-    { symbol: "ATHER", name: "Ather Energy", exchange: "NSE", lastClose: 1778.6 },
+    { symbol: "ATHERENERG", name: "Ather Energy", exchange: "NSE", lastClose: 1778.6 },
     { symbol: "PREMIERENE", name: "Premier Energies", exchange: "NSE", lastClose: 882.5 },
     { symbol: "STALLION", name: "Stallion India Fluorochemicals", exchange: "NSE", lastClose: 204.3 },
     { symbol: "NIFTY", name: "NIFTY 50", exchange: "INDEX", lastClose: 24536.6 },
@@ -107,13 +107,13 @@ async function main() {
       ownerSourceId: ronak.id,
       isReal: true,
       startingCash: 28356.3,
-      cash: 0,
+      cash: 5209, // net proceeds of the Premier sale (6 Nov) sit as desk cash
     },
   });
   const realPositions: Array<[string, number, number, string | null, string?]> = [
     ["GROWW", 40, 219.65, null],
-    ["ATHER", 4, 1659.95, null],
-    ["PREMIERENE", 6, 890.85, "SELL DECIDED"],
+    ["ATHERENERG", 4, 1659.95, null],
+    ["PREMIERENE", 6, 890.85, null],
     ["STALLION", 20, 204.27, "HOLD TILL DEC"],
     ["NYKAA", 10, 350.0, null, "2026-11-06"], // limit order filled 6 Nov @ ₹350.00
   ];
@@ -129,6 +129,14 @@ async function main() {
       },
     });
   }
+
+  // Premier Energies was SOLD on 6 Nov 2026: 6 shares @ ~₹874
+  // (gross ₹5,244, net proceeds ≈ ₹5,209 after charges). Closed properly
+  // so it lands in Records as a closed trade.
+  await prisma.position.updateMany({
+    where: { portfolioId: realPf.id, stockId: stocks["PREMIERENE"] },
+    data: { status: "CLOSED", sellPrice: 874, sellDate: d("2026-11-06") },
+  });
 
   /* ---------- Nykaa order (My Desk) — filled 6 Nov 2026 @ ₹350.00 ---------- */
   await prisma.order.create({
@@ -258,7 +266,7 @@ async function main() {
     ["2026-11-14", "ASHOKLEY", "Ashok Leyland Q2 results", "RESULTS"],
     ["2026-11-14", "STALLION", "Stallion Q2 results due (approx)", "RESULTS"],
     ["2026-12-07", null, "SEBI CAS rule goes live", "REGULATORY"],
-    ["2026-12-01", "ATHER", "Ather November sales data (early Dec)", "DATA"],
+    ["2026-12-01", "ATHERENERG", "Ather November sales data (early Dec)", "DATA"],
   ];
   for (const [date, symbol, title, kind] of events) {
     await prisma.catalystEvent.create({
@@ -285,7 +293,7 @@ async function main() {
   await prisma.dayNote.create({
     data: {
       date: d("2026-11-06"),
-      text: "Nykaa limit order filled @ 350.00. Premier sell not yet executed.",
+      text: "Nykaa limit order filled @ 350.00. Premier sold @ ~874 (6 shares) — position closed, proceeds on the desk.",
     },
   });
 
@@ -297,8 +305,11 @@ async function main() {
   });
   for (const p of allPf) {
     // Baseline is the 5 Nov close of play — positions entered later
-    // (the 6 Nov Nykaa fill) are holdings now, but were not held on 5 Nov.
-    const open = p.positions.filter((x) => x.status === "OPEN" && x.entryDate <= NOV5);
+    // (the 6 Nov Nykaa fill) are holdings now, but were not held on 5 Nov;
+    // positions sold later (Premier, sold 6 Nov) WERE held on 5 Nov.
+    const open = p.positions.filter(
+      (x) => x.entryDate <= NOV5 && (!x.sellDate || x.sellDate > NOV5)
+    );
     const invested = open.reduce((s, x) => s + x.units * x.entryPrice, 0);
     const market = open.reduce((s, x) => s + x.units * (x.stock.lastClose ?? 0), 0);
     const totalValue = p.isReal ? market : p.cash + market;
