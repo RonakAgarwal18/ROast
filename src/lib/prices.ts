@@ -10,6 +10,7 @@
 // Stock.lastClose / prevClose / closeDate, then writes the day's
 // PortfolioSnapshot rows.
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { portfolioRows } from "./stats";
 
@@ -226,11 +227,9 @@ export async function applyBhavcopy(
 
   // Collect every stock write first (in the original application order:
   // symbol rows, then name-matched rows, then index rows), then flush
-  // them in chunked transactions — one DB round-trip per chunk instead
-  // of one per stock. A full-master run is ~5k stocks; sequential
-  // per-stock updates took ~10 minutes, the batched flush takes seconds.
-  // Duplicate writes to the same stock still apply in order (last wins),
-  // exactly as the sequential version behaved.
+  // them as bulk UPDATE statements (see the flush below). Duplicate
+  // writes to the same stock still resolve last-wins, exactly as the
+  // original sequential version behaved.
   const pending: Array<{ id: number; close: number; prevClose: number | null }> = [];
   const queue = (stockId: number, close: number, prevClose: number | null) => {
     pending.push({ id: stockId, close, prevClose });
@@ -267,17 +266,29 @@ export async function applyBhavcopy(
     if (stock) queue(stock.id, idx.close, stock.lastClose);
   }
 
-  const CHUNK = 250;
-  for (let i = 0; i < pending.length; i += CHUNK) {
-    const slice = pending.slice(i, i + CHUNK);
-    await prisma.$transaction(
-      slice.map((u) =>
-        prisma.stock.update({
-          where: { id: u.id },
-          data: { lastClose: u.close, prevClose: u.prevClose, closeDate },
-        })
+  // Flush as bulk UPDATE…FROM (VALUES …) statements — one statement per
+  // chunk instead of one statement per stock. The original chunked
+  // transaction of ~5k single-row updates took minutes over the
+  // high-latency Vercel→Neon link and timed out the first cron run;
+  // this does the same work in ~20 statements. Duplicate ids collapse
+  // to their LAST queued write, the same final state the sequential
+  // version produced.
+  const byId = new Map<number, { close: number; prevClose: number | null }>();
+  for (const u of pending) byId.set(u.id, { close: u.close, prevClose: u.prevClose });
+  const flushRows = [...byId.entries()];
+  const CHUNK = 500;
+  for (let i = 0; i < flushRows.length; i += CHUNK) {
+    const slice = flushRows.slice(i, i + CHUNK);
+    const values = Prisma.join(
+      slice.map(
+        ([id, v]) => Prisma.sql`(${id}::int, ${v.close}::float8, ${v.prevClose}::float8)`
       )
     );
+    await prisma.$executeRaw`
+      UPDATE "Stock" AS s
+      SET "lastClose" = v.close, "prevClose" = v.prev, "closeDate" = ${closeDate}
+      FROM (VALUES ${values}) AS v(id, close, prev)
+      WHERE s.id = v.id`;
   }
 
   const snapshots = await writeSnapshots(date);
