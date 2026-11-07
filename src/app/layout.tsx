@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { Space_Grotesk, Inter, Instrument_Serif } from "next/font/google";
 import { getOwnerSession } from "@/lib/auth";
@@ -59,7 +60,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col bg-base text-cream">
         <header className="border-b border-edge/70 sticky top-0 z-40 bg-base/90 backdrop-blur">
           <div className="mx-auto max-w-6xl px-4 flex items-center gap-6 h-14">
-            <Link href="/" className="font-display tracking-tight text-xl">
+            <Link href="/" className="font-display tracking-tight text-xl flex items-center gap-2">
+              <Image src="/logo.png" alt="ROast logo" width={30} height={30} className="rounded-md" priority />
               <span className="font-bold">
                 RO<span className="text-groww">ast</span>
               </span>
