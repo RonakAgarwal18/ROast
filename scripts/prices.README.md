@@ -17,16 +17,23 @@ All price updates run through `src/lib/prices.ts`:
   `PortfolioSnapshot` row for every portfolio (total value, return %,
   and the NIFTY close, so "vs NIFTY" works over any window).
 
-Doors:
+Doors (the download logic lives in `src/lib/price-run.ts` since Round 5;
+every run is logged in the `PriceRun` table):
 
-1. **Nightly script** — `npx tsx scripts/update-prices.ts` downloads the
-   official files for the latest trading day (walking back over weekends
-   and holidays):
+1. **Nightly cron (primary)** — Vercel Cron calls `/api/cron/prices`
+   daily at 13:30 UTC (7:00 PM IST), guarded by `CRON_SECRET`. The site
+   downloads the official files itself for the latest trading day
+   (walking back over weekends and holidays):
    - NSE equity: `sec_bhavdata_full_<DDMMYYYY>.csv` from nsearchives.nseindia.com
    - NSE indices: `ind_close_all_<DDMMYYYY>.csv` (feeds the NIFTY row)
    - BSE equity: `BhavCopy_BSE_CM_0_0_0_<YYYYMMDD>_F_0000.csv` from bseindia.com
-   `--date 2026-11-05` pins a day; `--file ./x.csv` runs a local file
-   through the identical pipeline.
+   `/admin` also has a "Run prices now" button (same code, on demand).
+   Note: the apply step flushes with bulk UPDATE statements — per-row
+   updates over the Vercel→Neon link timed out the first cron run;
+   the bulk version completes the full master in ~3 seconds.
+0. **CLI script** — `npx tsx scripts/update-prices.ts` runs the same
+   shared download code; `--date 2026-11-05` pins a day; `--file ./x.csv`
+   runs a local file through the identical pipeline.
 2. **Admin upload** — `/admin` (linked from the footer): upload any of the
    files above and the same code runs in the browser session, reporting how
    many stocks were updated. This is the guaranteed route when a network

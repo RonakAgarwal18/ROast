@@ -181,19 +181,22 @@ Everything settles on **daily closing prices** — deliberately no live
 prices. Brokers pay for licensed exchange feeds; a scorekeeper only ever
 needs closes, and regulators discourage live prices in virtual products.
 
-One pipeline in `src/lib/prices.ts`, three doors:
+One pipeline in `src/lib/prices.ts`, four doors:
 
-1. **Nightly script** — `scripts/update-prices.ts` downloads the official
-   files for the latest trading day (walking back over weekends/holidays):
-   NSE equity bhavcopy (`sec_bhavdata_full_<DDMMYYYY>.csv`), the NSE index
-   close file (feeds the NIFTY row), and the BSE bhavcopy. It parses,
-   updates `Stock.lastClose` / `prevClose` / `closeDate`, and writes the
-   day's `PortfolioSnapshot` rows.
-2. **Admin upload** — `/admin` (linked in the footer) accepts the same
-   files via upload and runs the identical code, reporting how many
-   stocks were updated. Works even where a network blocks the exchange
-   hosts.
-3. **By hand** — single closes can be corrected from My Desk, and `/admin`
+1. **Nightly cron (primary, since Round 5)** — a Vercel Cron job hits
+   `/api/cron/prices` daily at 13:30 UTC (7:00 PM IST); the site downloads
+   the official files itself for the latest trading day (walking back over
+   weekends/holidays) via `src/lib/price-run.ts`: NSE equity bhavcopy
+   (`sec_bhavdata_full_<DDMMYYYY>.csv`), the NSE index close file (feeds
+   the NIFTY row), and the BSE bhavcopy. Every run is logged in the
+   `PriceRun` table and shown in the /admin freshness panel.
+2. **CLI script** — `scripts/update-prices.ts` runs the same shared code
+   (and can apply a local file with `--file`).
+3. **Admin upload + "Run prices now"** — `/admin` (linked in the footer)
+   accepts the same files via upload and runs the identical code, or
+   triggers the download run on demand. Works even where a network
+   blocks the exchange hosts.
+4. **By hand** — single closes can be corrected from My Desk, and `/admin`
    can freeze a snapshot at current closes.
 
 The **stock master** (`scripts/load-stock-master.ts`) loads the official
