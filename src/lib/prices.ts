@@ -127,7 +127,15 @@ export function parseBhavcopyCsv(text: string): ParsedBhavcopy {
       const name = (r["INDEX NAME"] ?? "").toUpperCase();
       const close = num(r["CLOSING INDEX VALUE"]);
       if (close === null) continue;
-      if (name === "NIFTY 50") out.index.push({ symbol: "NIFTY", close });
+      const INDEX_SYMBOLS: Record<string, string> = {
+        "NIFTY 50": "NIFTY",
+        "NIFTY NEXT 50": "NIFTYNEXT50",
+        "NIFTY BANK": "NIFTYBANK",
+        "NIFTY IT": "NIFTYIT",
+        "INDIA VIX": "INDIAVIX",
+      };
+      const sym = INDEX_SYMBOLS[name];
+      if (sym) out.index.push({ symbol: sym, close });
       out.fileDate = out.fileDate ?? parseDateCell(r["INDEX DATE"]);
     }
     return out;

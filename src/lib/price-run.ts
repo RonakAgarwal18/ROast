@@ -13,6 +13,7 @@ import { prisma } from "./db";
 import { parseBhavcopyCsv, applyBhavcopy, dayDate } from "./prices";
 import { NAVALL_URL, parseNavAll, refreshFundMaster, applyFundNavs } from "./funds";
 import { recordMoverHeadlines } from "./movers";
+import { applyWorldQuotes } from "./world";
 
 const UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
@@ -182,6 +183,18 @@ export async function runNightlyPrices(
           `Movers news step failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)
         );
       }
+    }
+
+    // World board (Round 8, best effort): global indices, metals, oil,
+    // FX and crypto closes from Yahoo.
+    try {
+      const world = await applyWorldQuotes();
+      if (world.updated > 0) notes.push(`World: ${world.updated} instruments updated`);
+      if (world.failed.length > 0) notes.push(`World failed: ${world.failed.join(", ")}`);
+    } catch (e) {
+      notes.push(
+        `World step failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)
+      );
     }
 
     const summary: PriceRunSummary = nseApplied

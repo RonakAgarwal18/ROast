@@ -45,6 +45,7 @@ const NAV = [
   { href: "/movers", label: "Movers" },
   { href: "/portfolios", label: "Portfolios" },
   { href: "/funds", label: "Funds" },
+  { href: "/world", label: "World" },
   { href: "/add", label: "Add Analysis" },
   { href: "/checklists", label: "Checklists" },
   { href: "/calendar", label: "Calendar" },
