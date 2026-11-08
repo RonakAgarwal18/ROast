@@ -1,5 +1,5 @@
-import { wholeShares } from "@/lib/format";
 "use server";
+import { wholeShares } from "@/lib/format";
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
