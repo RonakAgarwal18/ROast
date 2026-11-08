@@ -98,7 +98,7 @@ function looksLikeClaim(sentence: string): boolean {
 }
 
 const CONTEST_LINE =
-  /^\s*\d+\s*[.)]\s+([A-Z][A-Z0-9.&-]{1,24})\s*[—–-]\s*(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d+)?)\s*[—–-]\s*(.+)$/;
+  /^\s*\d+\s*\\?[.)]\s+([A-Z][A-Z0-9.&-]{1,24})\s*[—–-]\s*(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d+)?)\s*[—–-]\s*(.+)$/;
 
 export function parseAnalysis(
   text: string,

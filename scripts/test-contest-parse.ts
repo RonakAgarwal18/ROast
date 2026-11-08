@@ -12,7 +12,7 @@ async function main() {
   }
   const sql = neon((process.env.DIRECT_URL ?? "").replace("channel_binding=require", "channel_binding=prefer"));
   const stocks = (await sql`SELECT "id", "symbol", "name", "lastClose" FROM "Stock"`) as any[];
-  const text = fs.readFileSync("/tmp/contest/grok.txt", "utf8");
+  const text = fs.readFileSync("/tmp/contest/chatgpt.txt", "utf8");
   const result = parseAnalysis(text, stocks, new Date("2026-11-08T22:00:00Z"));
   console.log("contest:", result.contest, "| due:", result.contestDue);
   for (const p of result.positions) console.log(`POS ${p.symbol} planned ₹${p.plannedAmount} (lastClose ${p.entryPrice})`);

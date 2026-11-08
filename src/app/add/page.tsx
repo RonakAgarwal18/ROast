@@ -24,19 +24,20 @@ CLAIMS:
 
 Rules: every claim must be falsifiable (a number, a date, or a named event). If you cannot name a catalyst and a key date, do not include the stock. End with one line: BIGGEST RISK: <what kills this set of picks>.`;
 
-const DAY_CONTEST_PROMPT = `You have ₹1,00,000 of paper money to invest in Indian stocks (NSE/BSE) for ONE trading day: tomorrow.
+const DAY_CONTEST_PROMPT = `You have ₹1,00,000 of paper money to invest in Indian stocks (NSE/BSE) for ONE trading day: Monday, 9 November 2026. That exact date — not Tuesday (10 November is a market holiday).
 
-What wins: stocks that move BIG tomorrow — I want the 10–20% movers, the kind that make the maximum profit in a single day. That's the target. Do your own deep analysis and hunt for exactly those.
+What wins: stocks that move BIG on Monday, 9 November — I want the 10–20% movers, the kind that make the maximum profit in a single day. That's the target. Do your own deep analysis and hunt for exactly those.
 
 The rules:
 - Allocate the full ₹1,00,000 across your picks however you like. Fully invested — no cash left over. Maximum total ₹1,00,000.
-- Every order fills at tomorrow's OPENING price, whatever it turns out to be. Everything is sold at tomorrow's CLOSING price. Your score is the portfolio's return from open to close.
-- Your picks and your reasoning will be recorded word for word and judged against what actually happens.
+- Every order fills at the OPENING price on Monday, 9 November 2026, whatever it turns out to be. Everything is sold at the CLOSING price the same day. Your score is the portfolio's return from that open to that close.
+- You buy whole shares only — an allocation smaller than one share's price buys nothing, and leftovers from rounding stay as cash. Size your picks accordingly.
+- Your picks and your reasoning will be recorded word for word and judged against what actually happens on 9 November.
 
 Reply in exactly this shape, so I can book the orders:
 
 PORTFOLIO — total ₹1,00,000, fully invested:
-1. <NSE SYMBOL> — ₹<amount> — <your reasoning, in your own words, including the move you expect tomorrow>
+1. <NSE SYMBOL> — ₹<amount> — <your reasoning, in your own words, including the move you expect on Monday, 9 November>
 2. ...
 (as many or as few picks as you want)
 
