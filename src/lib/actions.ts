@@ -1,3 +1,4 @@
+import { wholeShares } from "@/lib/format";
 "use server";
 
 import { cookies } from "next/headers";
@@ -99,10 +100,20 @@ export async function addPosition(formData: FormData) {
   const tag = String(formData.get("tag") ?? "").trim();
   if (!portfolioId || !stockId || !entryPrice) return;
 
-  // Either explicit units, or a ₹ amount to deploy (fractional units allowed).
+  // Either explicit units, or a ₹ amount to deploy. Indian equities
+  // trade in whole shares only — amounts floor to full shares and the
+  // unspent remainder simply stays in the portfolio's cash. Fractional
+  // units exist only for mutual funds.
+  const stockForUnits = await prisma.stock.findUnique({
+    where: { id: stockId },
+    select: { exchange: true },
+  });
+  if (!stockForUnits) return;
   let units = parseFloat(unitsRaw);
   if (!units && amountRaw) units = parseFloat(amountRaw) / entryPrice;
   if (!units) return;
+  units = wholeShares(stockForUnits.exchange, units);
+  if (units < 1) return;
 
   const portfolio = await prisma.portfolio.findUnique({ where: { id: portfolioId } });
   if (!portfolio) return;
@@ -254,7 +265,7 @@ export async function confirmPaste(formData: FormData) {
         data: {
           portfolioId,
           stockId: Number(pos.stockId),
-          units: plannedAmount / entryPrice,
+          units: Math.floor(plannedAmount / entryPrice),
           entryPrice,
           entryDate: new Date(),
           entryMode: "NEXT_OPEN",
@@ -266,7 +277,12 @@ export async function confirmPaste(formData: FormData) {
       cash -= plannedAmount;
       continue;
     }
-    const units = fixedAmount / entryPrice;
+    const stRow = await prisma.stock.findUnique({
+      where: { id: Number(pos.stockId) },
+      select: { exchange: true },
+    });
+    const units = wholeShares(stRow?.exchange ?? "NSE", fixedAmount / entryPrice);
+    if (units < 1) continue;
     await prisma.position.create({
       data: {
         portfolioId,
@@ -278,7 +294,7 @@ export async function confirmPaste(formData: FormData) {
         exitPrice: pos.exitPrice ? Number(pos.exitPrice) : null,
       },
     });
-    cash -= fixedAmount;
+    cash -= units * entryPrice;
   }
 
   for (const claim of mergedClaims) {

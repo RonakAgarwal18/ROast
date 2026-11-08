@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { inr, price, priceOpt, pct, fmtDate } from "@/lib/format";
+import { inr, price, priceOpt, pct, fmtDate, unitsFmt } from "@/lib/format";
 import { addDayNote, updateStockClose, updateOrder, deleteOrder } from "@/lib/actions";
 import { PageTitle } from "@/components/ui";
 
@@ -68,7 +68,7 @@ export default async function MyDeskPage() {
                           <span className="pill border-ambery/60 text-ambery mt-1">{p.tag}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right">{p.units}</td>
+                      <td className="px-4 py-3 text-right">{unitsFmt(p.stock.exchange, p.units)}</td>
                       <td className="px-4 py-3 text-right">{price(p.entryPrice)}</td>
                       <td className="px-4 py-3 text-right">
                         <form action={updateStockClose} className="inline-flex gap-1 items-center justify-end">

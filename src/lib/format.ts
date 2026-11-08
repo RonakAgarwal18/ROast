@@ -44,3 +44,20 @@ export function daysBetween(from: Date, to: Date): number {
   const b = new Date(to.getFullYear(), to.getMonth(), to.getDate());
   return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
+
+/** Indian equities trade in WHOLE shares only — fractional units are
+ * real solely for mutual funds (exchange "MF"). */
+export function wholeShares(exchange: string, units: number): number {
+  return exchange === "MF" ? units : Math.floor(units);
+}
+
+/** Display units: whole number for equities, up to 3dp for funds,
+ * exact legacy value when a historical row is fractional. */
+export function unitsFmt(exchange: string, units: number): string {
+  if (exchange === "MF") {
+    return units.toLocaleString("en-IN", { maximumFractionDigits: 3 });
+  }
+  return Number.isInteger(units)
+    ? units.toLocaleString("en-IN")
+    : units.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { price, priceOpt, pct, fmtDate, fmtDayShort } from "@/lib/format";
+import { price, priceOpt, pct, fmtDate, fmtDayShort, unitsFmt } from "@/lib/format";
 import { PageTitle, VerdictStamp } from "@/components/ui";
 import { PriceChart, type EntryLine } from "@/components/PriceChart";
 
@@ -141,7 +141,7 @@ export default async function StockPage({
                     <div className="text-muted text-xs">
                       {p.portfolio.owner.name} · {p.status} · in {fmtDate(p.entryDate)} @{" "}
                       {price(p.entryPrice)}
-                      {p.units ? ` · ${p.units} units` : ""}
+                      {p.units ? ` · ${unitsFmt(stock.exchange, p.units)} units` : ""}
                     </div>
                   </div>
                   <span

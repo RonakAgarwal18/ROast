@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { portfolioSnapshots } from "@/lib/stats";
-import { inr, price, priceOpt, pct, fmtDate } from "@/lib/format";
+import { inr, price, priceOpt, pct, fmtDate, unitsFmt } from "@/lib/format";
 import { addPosition, closePosition, updatePosition, deletePosition } from "@/lib/actions";
 import { PageTitle, VerdictStamp } from "@/components/ui";
 import { EquityChart } from "@/components/Sparkline";
@@ -96,7 +96,7 @@ export default async function PortfolioDetail({
                       #{p.stock.symbol} · in {fmtDate(p.entryDate)}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right">{p.units.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right">{unitsFmt(p.stock.exchange, p.units)}</td>
                   <td className="px-4 py-3 text-right">{price(p.entryPrice)}</td>
                   <td className="px-4 py-3 text-right">{priceOpt(p.stock.lastClose)}</td>
                   <td
@@ -189,8 +189,9 @@ export default async function PortfolioDetail({
           Add position
         </button>
         <p className="w-full text-xs text-muted">
-          Search finds any stock in the master; the price shown is its last close. The entry
-          price you type is the price this portfolio is scored on.
+          Search finds any stock in the master; the price shown is its last close. Shares are
+          whole numbers only — a ₹ amount floors to full shares and the rest stays as cash.
+          The entry price you type is the price this portfolio is scored on.
         </p>
       </form>
 
@@ -202,7 +203,7 @@ export default async function PortfolioDetail({
             {portfolio.positions.map((p) => (
               <details key={p.id} className="rounded-2xl border border-edge bg-panel px-5 py-3">
                 <summary className="cursor-pointer text-sm font-semibold">
-                  {p.stock.name} <span className="text-muted font-normal">#{p.stock.symbol} · {p.status} · {p.units.toFixed(2)} units @ {price(p.entryPrice)} · in {fmtDate(p.entryDate)}</span>
+                  {p.stock.name} <span className="text-muted font-normal">#{p.stock.symbol} · {p.status} · {unitsFmt(p.stock.exchange, p.units)} units @ {price(p.entryPrice)} · in {fmtDate(p.entryDate)}</span>
                 </summary>
                 <form action={updatePosition} className="mt-4 flex flex-wrap gap-3 items-end">
                   <input type="hidden" name="positionId" value={p.id} />
