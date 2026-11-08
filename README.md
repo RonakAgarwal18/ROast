@@ -57,6 +57,14 @@ BURNT claims are framed permanently in the Burnt Bin on the Records page.
 - **Compare** — any 2–3 portfolios side by side: value, cash, return,
   return vs NIFTY over the snapshot window, best/worst pick, claims
   accuracy, and overlaid equity curves.
+- **Stock pages + charts** — every stock gets a page (`/stocks/<SYMBOL>`)
+  with its close-price chart (1M / 3M / 6M / 1Y / ALL), range returns, and
+  dashed overlay lines at each league portfolio's entry price — who bought
+  where, on the same chart — plus its claims and calendar events.
+- **Daily Movers** — the day's top gainers and losers computed from the
+  exchange closes, with day navigation. A "why it moved" cause is shown
+  only when the owner curates one with a source link; otherwise the page
+  honestly says *no verified cause found*.
 - **Checklists** — every claim as a checklist card grouped by due date
   (overdue / today / this week / later), tick-boxes with states, and a
   verdict stamp.
@@ -232,10 +240,9 @@ the script's `--file` mode or the `/admin` upload — identical code path.)
 
 Honest list of what is **not** built yet:
 
-- Deployment wiring (Neon Postgres + Vercel) — the schema and env switch
-  are ready, the accounts and deploy are not done
-- Fully automatic scheduling of the nightly job (the script runs today;
-  cron/systemd wiring is deployment work)
+- Mutual funds as league benchmarks (AMFI daily NAV) with a funds
+  dashboard — search, add-to-league, suggested benchmarks
+- World board — global indices, gold/silver, and market news headlines
 - Seasons (monthly board resets) and a public submission queue for tips
 - Per-claim price charts (AnaChart-style target-vs-price dots)
 
