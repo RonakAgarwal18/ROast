@@ -6,6 +6,7 @@ import { inr, price, priceOpt, pct, fmtDate } from "@/lib/format";
 import { addPosition, closePosition, updatePosition, deletePosition } from "@/lib/actions";
 import { PageTitle, VerdictStamp } from "@/components/ui";
 import { EquityChart } from "@/components/Sparkline";
+import StockPicker from "@/components/StockPicker";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,10 @@ export default async function PortfolioDetail({
   });
   if (!portfolio) notFound();
 
-  const stocks = await prisma.stock.findMany({ orderBy: { name: "asc" } });
   const snaps = await portfolioSnapshots(portfolio.id);
   const open = portfolio.positions.filter((p) => p.status === "OPEN");
   const invested = open.reduce((s, p) => s + p.units * p.entryPrice, 0);
   const market = open.reduce((s, p) => s + p.units * (p.stock.lastClose ?? 0), 0);
-  const firstStock = stocks[0];
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -155,14 +154,8 @@ export default async function PortfolioDetail({
       >
         <input type="hidden" name="portfolioId" value={portfolio.id} />
         <label className="flex flex-col gap-1 text-xs text-muted">
-          Stock
-          <select name="stockId" className={`${inputCls} w-56`} defaultValue={firstStock?.id}>
-            {stocks.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} (#{s.symbol}) — close {priceOpt(s.lastClose)}
-              </option>
-            ))}
-          </select>
+          Stock — search the full master
+          <StockPicker name="stockId" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted">
           ₹ amount to deploy
@@ -196,8 +189,8 @@ export default async function PortfolioDetail({
           Add position
         </button>
         <p className="w-full text-xs text-muted">
-          The last close is only a pre-fill in the dropdown — the entry price you type is the
-          price this portfolio is scored on.
+          Search finds any stock in the master; the price shown is its last close. The entry
+          price you type is the price this portfolio is scored on.
         </p>
       </form>
 
