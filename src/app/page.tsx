@@ -83,18 +83,35 @@ export default async function Home() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/league"
-              className="rounded-full bg-groww text-black font-display font-bold px-6 py-3 hover:brightness-110"
-            >
-              See the league
-            </Link>
-            <Link
               href="/add"
-              className="rounded-full border-2 border-cream/70 font-display font-bold px-6 py-3 hover:border-groww hover:text-groww"
+              className="rounded-full bg-groww text-black font-display font-bold px-6 py-3 hover:brightness-110"
             >
               Paste an analysis
             </Link>
+            <Link
+              href="/league"
+              className="rounded-full border-2 border-cream/70 font-display font-bold px-6 py-3 hover:border-groww hover:text-groww"
+            >
+              See the league
+            </Link>
           </div>
+
+          {/* The front door: the analysis flow, right on the landing */}
+          <Link
+            href="/add"
+            className="mt-8 block max-w-2xl rounded-2xl border border-groww/40 bg-panel/80 p-5 hover:border-groww transition-colors"
+          >
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <span className="font-display font-bold text-lg">Got an AI's hot take?</span>
+              <span className="pill border-groww/50 text-groww">Paste · Parse · Proof</span>
+            </div>
+            <div className="mt-3 rounded-xl border border-edge bg-base/70 px-4 py-3 text-sm text-muted">
+              Drop the whole analysis here — the stocks, the paper orders and every dated
+              claim get pulled out automatically, each with the AI's exact words kept as
+              the receipt…
+            </div>
+            <div className="mt-3 font-display font-bold text-groww">Analyse it →</div>
+          </Link>
 
           {/* Live league snapshot strip */}
           {leader && (

@@ -40,18 +40,65 @@ export const metadata: Metadata = {
   },
 };
 
-const NAV = [
-  { href: "/league", label: "League" },
-  { href: "/movers", label: "Movers" },
-  { href: "/portfolios", label: "Portfolios" },
-  { href: "/funds", label: "Funds" },
-  { href: "/world", label: "World" },
-  { href: "/add", label: "Add Analysis" },
-  { href: "/checklists", label: "Checklists" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/my-desk", label: "My Desk" },
-  { href: "/records", label: "Records" },
+// Grouped navigation: the analysis flow is the front door (its own
+// button); everything else folds into three dropdowns. A group label
+// links to its first page — hover (or keyboard focus) reveals the rest.
+const NAV_GROUPS = [
+  {
+    label: "Portfolios",
+    href: "/portfolios",
+    items: [
+      { href: "/portfolios", label: "Portfolios", desc: "Every AI's book, live P&L" },
+      { href: "/checklists", label: "Checklists", desc: "Claims, judged with receipts" },
+      { href: "/calendar", label: "Calendar", desc: "Results & events that matter" },
+    ],
+  },
+  {
+    label: "Markets",
+    href: "/movers",
+    items: [
+      { href: "/movers", label: "Daily Movers", desc: "Who moved, and the news around it" },
+      { href: "/funds", label: "Funds", desc: "Benchmarks every book must beat" },
+      { href: "/world", label: "World", desc: "Indices, metals & headlines" },
+    ],
+  },
+  {
+    label: "My Desk",
+    href: "/my-desk",
+    items: [
+      { href: "/my-desk", label: "My Desk", desc: "The human's real portfolio" },
+      { href: "/records", label: "Records", desc: "The Burnt Bin — verdict history" },
+    ],
+  },
 ];
+
+function NavDropdown({ group }: { group: (typeof NAV_GROUPS)[number] }) {
+  return (
+    <div className="relative group">
+      <Link
+        href={group.href}
+        className="px-3 py-1.5 rounded-full text-muted hover:text-cream hover:bg-panel2 whitespace-nowrap inline-flex items-center gap-1"
+      >
+        {group.label}
+        <span className="text-[9px] opacity-70">▾</span>
+      </Link>
+      <div className="absolute left-0 top-full pt-2 hidden group-hover:block group-focus-within:block z-50">
+        <div className="rounded-xl border border-edge bg-panel p-1.5 min-w-60 shadow-2xl">
+          {group.items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="block px-3 py-2 rounded-lg hover:bg-panel2"
+            >
+              <span className="block text-cream font-medium">{item.label}</span>
+              <span className="block text-xs text-muted mt-0.5">{item.desc}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const owner = await getOwnerSession();
@@ -69,20 +116,54 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 RO<span className="text-groww">ast</span>
               </span>
             </Link>
-            <nav className="flex gap-1 overflow-x-auto text-sm">
-              {NAV.map((n) => (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  className="px-3 py-1.5 rounded-full text-muted hover:text-cream hover:bg-panel2 whitespace-nowrap"
-                >
-                  {n.label}
-                </Link>
+            <nav className="hidden md:flex gap-1 text-sm items-center">
+              <Link
+                href="/league"
+                className="px-3 py-1.5 rounded-full text-muted hover:text-cream hover:bg-panel2 whitespace-nowrap"
+              >
+                League
+              </Link>
+              {NAV_GROUPS.map((g) => (
+                <NavDropdown key={g.label} group={g} />
               ))}
             </nav>
-            <span className="ml-auto pill border-ambery/60 text-ambery hidden md:inline-flex">
-              Scorekeeper, never tipster
-            </span>
+            <div className="ml-auto flex items-center gap-3">
+              <span className="pill border-ambery/60 text-ambery hidden xl:inline-flex">
+                Scorekeeper, never tipster
+              </span>
+              <Link
+                href="/add"
+                className="rounded-full bg-groww text-black font-display font-bold px-4 py-1.5 text-sm hover:brightness-110 whitespace-nowrap"
+              >
+                + Add Analysis
+              </Link>
+              <details className="relative md:hidden">
+                <summary className="px-3 py-1.5 rounded-full border border-edge text-sm cursor-pointer list-none">
+                  Menu
+                </summary>
+                <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-edge bg-panel p-2 shadow-2xl z-50 max-h-[70vh] overflow-y-auto">
+                  <Link href="/league" className="block px-3 py-2 rounded-lg hover:bg-panel2 font-medium">
+                    League
+                  </Link>
+                  {NAV_GROUPS.map((g) => (
+                    <div key={g.label} className="mt-2">
+                      <div className="px-3 py-1 text-[11px] uppercase tracking-widest text-muted">
+                        {g.label}
+                      </div>
+                      {g.items.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className="block px-3 py-2 rounded-lg hover:bg-panel2"
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
           </div>
         </header>
         <main className="flex-1 w-full">{children}</main>
