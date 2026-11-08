@@ -24,10 +24,12 @@ export default async function MoversPage({
   const sp = await searchParams;
   const owner = await getOwnerSession();
 
-  const dayRows = await prisma.stockClose.groupBy({
-    by: ["date"],
+  const dayRows = await prisma.stockClose.findMany({
+    where: { stock: { exchange: { in: ["NSE", "BSE"] } } },
+    distinct: ["date"],
     orderBy: { date: "desc" },
     take: 60,
+    select: { date: true },
   });
   const days = dayRows.map((r) => r.date);
   const latest = days[0];

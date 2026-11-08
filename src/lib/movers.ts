@@ -21,13 +21,16 @@ export async function computeMovers(
 ): Promise<{ gainers: MoverRow[]; losers: MoverRow[]; prevIso: string | null }> {
   const date = dayDate(dateIso);
   const prevRow = await prisma.stockClose.findFirst({
-    where: { date: { lt: date } },
+    where: { date: { lt: date }, stock: { exchange: { in: ["NSE", "BSE"] } } },
     orderBy: { date: "desc" },
     select: { date: true },
   });
   if (!prevRow) return { gainers: [], losers: [], prevIso: null };
   const rows = await prisma.stockClose.findMany({
-    where: { date: { in: [date, prevRow.date] } },
+    where: {
+      date: { in: [date, prevRow.date] },
+      stock: { exchange: { in: ["NSE", "BSE"] } },
+    },
     include: { stock: { select: { symbol: true, name: true } } },
   });
   const byStock = new Map<number, { symbol: string; name: string; cur?: number; prev?: number }>();
