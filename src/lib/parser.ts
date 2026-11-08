@@ -11,6 +11,7 @@ export type ParsedPosition = {
   entryPrice: number;
   targetPrice: number | null;
   exitPrice: number | null;
+  plannedAmount?: number | null; // day-contest picks carry their own ₹ size
 };
 
 export type ParsedClaim = {
@@ -24,6 +25,8 @@ export type ParsedClaim = {
 export type ParseResult = {
   positions: ParsedPosition[];
   claims: ParsedClaim[];
+  contest?: boolean; // the paste is a day-contest portfolio (open → close)
+  contestDue?: string; // ISO date the contest day is judged on
 };
 
 type StockLite = { id: number; symbol: string; name: string; lastClose: number | null };
@@ -94,11 +97,69 @@ function looksLikeClaim(sentence: string): boolean {
   );
 }
 
+const CONTEST_LINE =
+  /^\s*\d+\s*[.)]\s+([A-Z][A-Z0-9.&-]{1,24})\s*[—–-]\s*(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d+)?)\s*[—–-]\s*(.+)$/;
+
 export function parseAnalysis(
   text: string,
   stocks: StockLite[],
   today: Date = new Date()
 ): ParseResult {
+  // 0) Day-contest format (the super prompt's reply shape): numbered
+  // lines carrying symbol + ₹ allocation + the AI's reasoning. When a
+  // paste is a contest portfolio, positions come from those lines alone
+  // — booked at the next session's open, sold at its close — and each
+  // pick's claims come from its own reasoning.
+  const bySymbol = new Map(stocks.map((s) => [s.symbol, s]));
+  const picks: Array<{ stock: StockLite; amount: number; reasoning: string }> = [];
+  for (const line of text.split(/\n+/)) {
+    const m = line.match(CONTEST_LINE);
+    if (!m) continue;
+    const stock = bySymbol.get(m[1]);
+    const amount = parseFloat(m[2].replace(/,/g, ""));
+    if (stock && amount > 0) picks.push({ stock, amount, reasoning: m[3].trim() });
+  }
+  if (picks.length > 0) {
+    const due = new Date(today);
+    due.setDate(due.getDate() + 1);
+    const contestDue = due.toISOString().slice(0, 10);
+    const positions: ParsedPosition[] = picks.map((pk) => ({
+      stockId: pk.stock.id,
+      symbol: pk.stock.symbol,
+      name: pk.stock.name,
+      action: "BUY",
+      entryPrice: pk.stock.lastClose ?? 0,
+      targetPrice: null,
+      exitPrice: null,
+      plannedAmount: pk.amount,
+    }));
+    const claims: ParsedClaim[] = [];
+    // The sentence that carries the expected move ("…should drive a
+    // 9–14% open-to-close expansion") is the claim that decides the
+    // contest — rank it first; the strongest factual sentence rides
+    // along as the second claim.
+    const moveScore = (x: string) =>
+      (/\d+\s*[-–]\s*\d+\s*%/.test(x) ? 2 : 0) + (/expect|should|targets?/i.test(x) ? 1 : 0);
+    for (const pk of picks) {
+      const sents = splitSentences(pk.reasoning);
+      const checkable = sents.filter((x) => looksLikeClaim(x));
+      const move = [...checkable].sort((a, b) => moveScore(b) - moveScore(a))[0];
+      const rest = checkable.filter((x) => x !== move);
+      const chosen = [move, rest[0]].filter(Boolean) as string[];
+      if (chosen.length === 0 && sents.length > 0) chosen.push(sents[0]);
+      for (const sent of chosen) {
+        claims.push({
+          stockId: pk.stock.id,
+          symbol: pk.stock.symbol,
+          claimText: sent.replace(/\s+/g, " ").slice(0, 240),
+          quoteSentence: sent.slice(0, 300),
+          dueDate: contestDue,
+        });
+      }
+    }
+    return { positions, claims, contest: true, contestDue };
+  }
+
   const sentences = splitSentences(text);
   const lower = text.toLowerCase();
 

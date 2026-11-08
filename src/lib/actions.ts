@@ -229,6 +229,7 @@ export async function confirmPaste(formData: FormData) {
       entryPrice: num(`pos_${i}_entry`) ?? pos.entryPrice,
       targetPrice: num(`pos_${i}_target`),
       exitPrice: num(`pos_${i}_exit`),
+      plannedAmount: num(`pos_${i}_amount`) ?? pos.plannedAmount ?? null,
     };
   });
   const rawClaims = (payload.claims ?? []) as Array<Record<string, unknown>>;
@@ -236,10 +237,35 @@ export async function confirmPaste(formData: FormData) {
     hasPosFields ? { ...claim, include: formData.get(`claim_${i}_include`) === "on" } : claim
   );
 
+  const isContest = payload.contest === true;
   for (const pos of mergedPositions) {
     if (pos.include === false) continue;
     const entryPrice = Number(pos.entryPrice);
     if (!entryPrice) continue;
+    if (isContest) {
+      // Day contest: the pick carries its own ₹ allocation. The position
+      // is booked unfilled — the nightly run fills it at the next
+      // session's open (units = amount / open) and auto-sells at that
+      // session's close. entryPrice/units here are the last close, for
+      // display until the fill reprices them.
+      const plannedAmount = Number(pos.plannedAmount ?? 0);
+      if (!plannedAmount) continue;
+      await prisma.position.create({
+        data: {
+          portfolioId,
+          stockId: Number(pos.stockId),
+          units: plannedAmount / entryPrice,
+          entryPrice,
+          entryDate: new Date(),
+          entryMode: "NEXT_OPEN",
+          exitMode: "DAY_CLOSE",
+          plannedAmount,
+          tag: "OPEN→CLOSE",
+        },
+      });
+      cash -= plannedAmount;
+      continue;
+    }
     const units = fixedAmount / entryPrice;
     await prisma.position.create({
       data: {

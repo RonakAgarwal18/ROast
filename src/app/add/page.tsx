@@ -24,6 +24,24 @@ CLAIMS:
 
 Rules: every claim must be falsifiable (a number, a date, or a named event). If you cannot name a catalyst and a key date, do not include the stock. End with one line: BIGGEST RISK: <what kills this set of picks>.`;
 
+const DAY_CONTEST_PROMPT = `You have ₹1,00,000 of paper money to invest in Indian stocks (NSE/BSE) for ONE trading day: tomorrow.
+
+What wins: stocks that move BIG tomorrow — I want the 10–20% movers, the kind that make the maximum profit in a single day. That's the target. Do your own deep analysis and hunt for exactly those.
+
+The rules:
+- Allocate the full ₹1,00,000 across your picks however you like. Fully invested — no cash left over. Maximum total ₹1,00,000.
+- Every order fills at tomorrow's OPENING price, whatever it turns out to be. Everything is sold at tomorrow's CLOSING price. Your score is the portfolio's return from open to close.
+- Your picks and your reasoning will be recorded word for word and judged against what actually happens.
+
+Reply in exactly this shape, so I can book the orders:
+
+PORTFOLIO — total ₹1,00,000, fully invested:
+1. <NSE SYMBOL> — ₹<amount> — <your reasoning, in your own words, including the move you expect tomorrow>
+2. ...
+(as many or as few picks as you want)
+
+The analysis is yours to do your way — the shape above is the only requirement.`;
+
 const QUICK_TAKE_PROMPT = `Give me your single best stock idea for the Indian market (NSE/BSE) right now, in exactly this format:
 
 STOCK: <full company name> (<NSE symbol>)
@@ -127,6 +145,18 @@ export default async function AddPage({
             readOnly
           />
 
+          {parsed.contest && (
+            <div className="mt-4 rounded-xl border border-groww/50 bg-groww/10 px-4 py-3 text-sm">
+              <span className="font-display font-bold text-groww">Day Contest detected.</span>{" "}
+              These picks carry their own ₹ allocations and will be booked as day orders:
+              filled at the <strong>next session's opening price</strong>, auto-sold at{" "}
+              <strong>that session's close</strong>. Judged on {parsed.contestDue ?? "the contest day"}.
+              Total allocated:{" "}
+              <strong>
+                ₹{(parsed.positions.reduce((a, p) => a + (p.plannedAmount ?? 0), 0)).toLocaleString("en-IN")}
+              </strong>
+            </div>
+          )}
           <h3 className="font-display font-bold mt-6 mb-2">
             Detected orders ({parsed.positions.length})
           </h3>
@@ -150,6 +180,19 @@ export default async function AddPage({
                 </label>
                 <span className="font-semibold">{p.name}</span>
                 <span className="pill">#{p.symbol}</span>
+                {parsed.contest ? (
+                  <label className="inline-flex items-center gap-1 text-muted text-xs">
+                    ₹ at next open
+                    <input
+                      name={`pos_${i}_amount`}
+                      type="number"
+                      step="any"
+                      defaultValue={p.plannedAmount ?? ""}
+                      placeholder="amount"
+                      className={`${inputCls} w-28 !py-1`}
+                    />
+                  </label>
+                ) : (
                 <label className="inline-flex items-center gap-1 text-muted text-xs">
                   entry ₹
                   <input
@@ -161,6 +204,9 @@ export default async function AddPage({
                     className={`${inputCls} w-28 !py-1`}
                   />
                 </label>
+                )}
+                {!parsed.contest && (
+                <>
                 <label className="inline-flex items-center gap-1 text-muted text-xs">
                   target ₹
                   <input
@@ -183,6 +229,8 @@ export default async function AddPage({
                     className={`${inputCls} w-24 !py-1`}
                   />
                 </label>
+                </>
+                )}
                 {p.entryPrice === 0 && (
                   <span className="text-xs text-ambery">
                     no close on record — type the entry price
@@ -230,10 +278,12 @@ export default async function AddPage({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-xs text-muted">
-              ₹ per pick (fixed sizing)
-              <input name="amountPerPick" type="number" step="any" defaultValue={10000} className={inputCls} />
-            </label>
+            {!parsed.contest && (
+              <label className="flex flex-col gap-1 text-xs text-muted">
+                ₹ per pick (fixed sizing)
+                <input name="amountPerPick" type="number" step="any" defaultValue={10000} className={inputCls} />
+              </label>
+            )}
           </div>
           <button className="mt-4 rounded-full bg-ambery text-black font-display font-bold px-6 py-2.5 hover:brightness-110 cursor-pointer">
             Confirm — serve it into the league
@@ -258,6 +308,11 @@ export default async function AddPage({
             name: "The Standard",
             blurb: "A full set of picks, each with entry, target, exit, catalyst and dated claims. The default kit.",
             text: PROMPT_KIT,
+          },
+          {
+            name: "The Day Contest",
+            blurb: "The one-day league: ₹1,00,000 fully invested, in at tomorrow's open, out at tomorrow's close. Paste the reply straight back into the box above — the parser books it as day orders automatically.",
+            text: DAY_CONTEST_PROMPT,
           },
           {
             name: "Quick Take",
