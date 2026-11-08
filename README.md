@@ -61,6 +61,12 @@ BURNT claims are framed permanently in the Burnt Bin on the Records page.
   with its close-price chart (1M / 3M / 6M / 1Y / ALL), range returns, and
   dashed overlay lines at each league portfolio's entry price — who bought
   where, on the same chart — plus its claims and calendar events.
+- **Mutual fund benchmarks** — every AMFI scheme (14,000+) is searchable
+  on the Funds page; suggested Direct-Growth benchmarks (index, flexi,
+  mid, small, gold, liquid) can be added to the league with virtual cash
+  in one click. A league fund is valued nightly from AMFI's official NAV
+  file and gets the same charts as a stock. Benchmarks are yardsticks,
+  not recommendations.
 - **Daily Movers** — the day's top gainers and losers computed from the
   exchange closes, with day navigation. A "why it moved" cause is shown
   only when the owner curates one with a source link; otherwise the page
@@ -240,8 +246,6 @@ the script's `--file` mode or the `/admin` upload — identical code path.)
 
 Honest list of what is **not** built yet:
 
-- Mutual funds as league benchmarks (AMFI daily NAV) with a funds
-  dashboard — search, add-to-league, suggested benchmarks
 - World board — global indices, gold/silver, and market news headlines
 - Seasons (monthly board resets) and a public submission queue for tips
 - Per-claim price charts (AnaChart-style target-vs-price dots)
