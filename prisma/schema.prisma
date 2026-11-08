@@ -48,6 +48,23 @@ model StockClose {
   @@index([date])
 }
 
+/// A news headline published around a big move, stored by the nightly
+/// run for the day's top movers. Shown on the Daily Movers page as
+/// POSSIBLE CONTEXT when no verified cause is curated — never dressed
+/// up as the cause itself.
+model MoverHeadline {
+  id          Int       @id @default(autoincrement())
+  date        DateTime // the trading day (midnight, local)
+  symbol      String
+  title       String
+  url         String
+  source      String?
+  publishedAt DateTime?
+
+  @@unique([date, symbol, title])
+  @@index([date, symbol])
+}
+
 /// One mutual fund scheme from AMFI's daily NAV file (Round 7).
 /// Refreshed by the nightly price run. A scheme joins the league by
 /// becoming a Stock with exchange = "MF" and symbol = "MF<schemeCode>",

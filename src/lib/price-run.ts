@@ -12,6 +12,7 @@
 import { prisma } from "./db";
 import { parseBhavcopyCsv, applyBhavcopy, dayDate } from "./prices";
 import { NAVALL_URL, parseNavAll, refreshFundMaster, applyFundNavs } from "./funds";
+import { recordMoverHeadlines } from "./movers";
 
 const UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
@@ -167,6 +168,20 @@ export async function runNightlyPrices(
       notes.push(
         `Funds step failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)
       );
+    }
+
+    // Daily Movers news context (best effort): store the headlines that
+    // ran around the day's biggest moves, shown as possible context —
+    // never as a verified cause.
+    if (tradeDate) {
+      try {
+        const withNews = await recordMoverHeadlines(tradeDate);
+        if (withNews > 0) notes.push(`Movers: news context stored for ${withNews} stocks`);
+      } catch (e) {
+        notes.push(
+          `Movers news step failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)
+        );
+      }
     }
 
     const summary: PriceRunSummary = nseApplied

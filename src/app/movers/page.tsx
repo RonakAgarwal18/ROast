@@ -4,6 +4,7 @@ import { getOwnerSession } from "@/lib/auth";
 import { price, pct, fmtDate, fmtDayShort } from "@/lib/format";
 import { PageTitle } from "@/components/ui";
 import { setMoverNote, deleteMoverNote } from "@/lib/actions";
+import { computeMovers, MOVER_MIN_PRICE, type MoverRow } from "@/lib/movers";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,7 @@ const TOP_N = 15;
 const inputCls =
   "rounded-lg border border-edge bg-base px-3 py-2 text-sm text-cream placeholder:text-muted/60 w-full";
 
-type Mover = {
-  symbol: string;
-  name: string;
-  close: number;
-  prev: number;
-  change: number;
-};
+type Mover = MoverRow;
 
 export default async function MoversPage({
   searchParams,
@@ -54,33 +49,22 @@ export default async function MoversPage({
   const nextDay = idx > 0 ? days[idx - 1] : undefined;
   const chosenIso = chosen.toISOString().slice(0, 10);
 
-  let gainers: Mover[] = [];
-  let losers: Mover[] = [];
-  if (prevDay) {
-    const rows = await prisma.stockClose.findMany({
-      where: { date: { in: [chosen, prevDay] } },
-      include: { stock: { select: { symbol: true, name: true } } },
-    });
-    const byStock = new Map<number, { symbol: string; name: string; cur?: number; prev?: number }>();
-    for (const r of rows) {
-      const e = byStock.get(r.stockId) ?? { symbol: r.stock.symbol, name: r.stock.name };
-      if (r.date.getTime() === chosen.getTime()) e.cur = r.close;
-      else e.prev = r.close;
-      byStock.set(r.stockId, e);
-    }
-    const all: Mover[] = [];
-    for (const e of byStock.values()) {
-      if (e.cur === undefined || e.prev === undefined || e.prev <= 0 || e.cur < MIN_PRICE) continue;
-      all.push({
-        symbol: e.symbol,
-        name: e.name,
-        close: e.cur,
-        prev: e.prev,
-        change: ((e.cur - e.prev) / e.prev) * 100,
-      });
-    }
-    gainers = [...all].sort((a, b) => b.change - a.change).slice(0, TOP_N);
-    losers = [...all].sort((a, b) => a.change - b.change).slice(0, TOP_N);
+  const chosenIsoStr = chosen.toISOString().slice(0, 10);
+  const computed = prevDay
+    ? await computeMovers(chosenIsoStr, TOP_N)
+    : { gainers: [] as Mover[], losers: [] as Mover[], prevIso: null };
+  const gainers = computed.gainers;
+  const losers = computed.losers;
+
+  const headlines = await prisma.moverHeadline.findMany({
+    where: { date: chosen },
+    orderBy: { publishedAt: "asc" },
+  });
+  const headlinesBySymbol = new Map<string, typeof headlines>();
+  for (const h of headlines) {
+    const arr = headlinesBySymbol.get(h.symbol) ?? [];
+    arr.push(h);
+    headlinesBySymbol.set(h.symbol, arr);
   }
 
   const notes = await prisma.moverNote.findMany({ where: { date: chosen } });
@@ -129,7 +113,31 @@ export default async function MoversPage({
             )}
           </div>
         ) : (
-          <div className="mt-1 text-xs text-muted italic">no verified cause found</div>
+          <>
+            <div className="mt-1 text-xs text-muted italic">no verified cause found</div>
+            {(headlinesBySymbol.get(m.symbol) ?? []).length > 0 && (
+              <div className="mt-2 text-sm">
+                <div className="text-xs uppercase tracking-wider text-muted mb-1">
+                  In the news around then — possible context, not a verified cause
+                </div>
+                <ul className="space-y-1">
+                  {(headlinesBySymbol.get(m.symbol) ?? []).map((h) => (
+                    <li key={h.id}>
+                      <a
+                        href={h.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-groww underline-offset-2 hover:underline"
+                      >
+                        {h.title}
+                      </a>
+                      {h.source && <span className="text-muted text-xs"> — {h.source}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
         {owner && !note && (
           <form action={setMoverNote} className="mt-2 flex flex-col sm:flex-row gap-2">
