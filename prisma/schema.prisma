@@ -30,6 +30,36 @@ model Stock {
   orders    Order[]
   claims    Claim[]
   events    CatalystEvent[]
+  closes    StockClose[]
+}
+
+/// One daily close per stock, written by the price pipeline alongside the
+/// Stock.lastClose update (Round 6). Powers stock charts, range returns
+/// and the Daily Movers page. ~13 months are kept; the pipeline prunes
+/// older rows.
+model StockClose {
+  id      Int      @id @default(autoincrement())
+  stockId Int
+  stock   Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  date    DateTime // the trading day (midnight, local)
+  close   Float
+
+  @@unique([stockId, date])
+  @@index([date])
+}
+
+/// A human-curated "why it moved" note for one stock on one day, shown on
+/// the Daily Movers page. Scorekeeper rules: a cause needs a source link,
+/// and "no verified cause found" is a valid, honest entry.
+model MoverNote {
+  id        Int      @id @default(autoincrement())
+  date      DateTime // the trading day (midnight, local)
+  symbol    String
+  cause     String
+  sourceUrl String?
+  createdAt DateTime @default(now())
+
+  @@unique([date, symbol])
 }
 
 /// Who served the picks — an AI (Gemini, Hanu, ...) or a human (Ronak).

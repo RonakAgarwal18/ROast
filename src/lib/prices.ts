@@ -291,6 +291,23 @@ export async function applyBhavcopy(
       WHERE s.id = v.id`;
   }
 
+  // Round 6: record the day's closes into StockClose history (same
+  // last-wins rows as the Stock flush above), then prune anything
+  // older than ~13 months so the table stays lean.
+  for (let i = 0; i < flushRows.length; i += CHUNK) {
+    const slice = flushRows.slice(i, i + CHUNK);
+    const values = Prisma.join(
+      slice.map(([id, v]) => Prisma.sql`(${id}::int, ${closeDate}::timestamp, ${v.close}::float8)`)
+    );
+    await prisma.$executeRaw`
+      INSERT INTO "StockClose" ("stockId", "date", "close")
+      SELECT * FROM (VALUES ${values}) AS v(id, d, c)
+      ON CONFLICT ("stockId", "date") DO UPDATE SET "close" = EXCLUDED."close"`;
+  }
+  const pruneBefore = new Date(closeDate);
+  pruneBefore.setDate(pruneBefore.getDate() - 400);
+  await prisma.$executeRaw`DELETE FROM "StockClose" WHERE "date" < ${pruneBefore}`;
+
   const snapshots = await writeSnapshots(date);
   return { kind: parsed.kind, updated, date, snapshots };
 }

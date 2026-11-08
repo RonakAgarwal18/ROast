@@ -106,6 +106,7 @@ export async function GET(request: Request) {
     dayNotes: await prisma.dayNote.findMany({ orderBy: { id: "asc" } }),
     rules: await prisma.rule.findMany({ orderBy: { id: "asc" } }),
     priceRuns: await prisma.priceRun.findMany({ orderBy: { id: "asc" } }),
+    moverNotes: await prisma.moverNote.findMany({ orderBy: { id: "asc" } }),
     stocks: await prisma.stock.findMany({ orderBy: { id: "asc" } }),
   };
   return new NextResponse(JSON.stringify(dump, null, 2), {

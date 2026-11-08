@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { portfolioSnapshots } from "@/lib/stats";
@@ -91,7 +92,7 @@ export default async function PortfolioDetail({
               return (
                 <tr key={p.id} className="border-t border-edge/60 bg-panel">
                   <td className="px-4 py-3">
-                    <div className="font-semibold">{p.stock.name}</div>
+                    <Link href={`/stocks/${encodeURIComponent(p.stock.symbol)}`} className="font-semibold hover:text-groww">{p.stock.name}</Link>
                     <div className="text-xs text-muted">
                       #{p.stock.symbol} · in {fmtDate(p.entryDate)}
                     </div>

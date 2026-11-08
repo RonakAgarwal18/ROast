@@ -538,3 +538,31 @@ export async function deleteOrder(formData: FormData) {
   await prisma.order.delete({ where: { id: orderId } });
   revalidatePath("/my-desk");
 }
+
+/* ---------------- Round 6: Daily Movers causes ---------------- */
+
+export async function setMoverNote(formData: FormData) {
+  await requireOwner();
+  const dateStr = String(formData.get("date") ?? "");
+  const symbol = String(formData.get("symbol") ?? "").toUpperCase().trim();
+  const cause = String(formData.get("cause") ?? "").trim();
+  const sourceUrl = String(formData.get("sourceUrl") ?? "").trim();
+  if (!dateStr || !symbol || !cause) return;
+  const date = new Date(`${dateStr}T00:00:00.000Z`);
+  await prisma.moverNote.upsert({
+    where: { date_symbol: { date, symbol } },
+    update: { cause, sourceUrl: sourceUrl || null },
+    create: { date, symbol, cause, sourceUrl: sourceUrl || null },
+  });
+  revalidatePath("/movers");
+}
+
+export async function deleteMoverNote(formData: FormData) {
+  await requireOwner();
+  const dateStr = String(formData.get("date") ?? "");
+  const symbol = String(formData.get("symbol") ?? "").toUpperCase().trim();
+  if (!dateStr || !symbol) return;
+  const date = new Date(`${dateStr}T00:00:00.000Z`);
+  await prisma.moverNote.deleteMany({ where: { date, symbol } });
+  revalidatePath("/movers");
+}
