@@ -67,6 +67,12 @@ BURNT claims are framed permanently in the Burnt Bin on the Records page.
   in one click. A league fund is valued nightly from AMFI's official NAV
   file and gets the same charts as a stock. Benchmarks are yardsticks,
   not recommendations.
+- **World board** — Nifty family (50 / Next 50 / Bank / IT / India VIX),
+  global indices (S&P 500, Dow, Nasdaq, FTSE, DAX, Nikkei, Hang Seng,
+  SSE), gold, silver, crude, USD/INR and Bitcoin, each with a sparkline
+  and a full chart page, plus the day's market headlines linked to their
+  publishers. Refreshed by the nightly run (Yahoo daily bars; Stooq is
+  bot-walled).
 - **Daily Movers** — the day's top gainers and losers computed from the
   exchange closes, with day navigation. A "why it moved" cause is shown
   only when the owner curates one with a source link; otherwise the page
@@ -246,7 +252,6 @@ the script's `--file` mode or the `/admin` upload — identical code path.)
 
 Honest list of what is **not** built yet:
 
-- World board — global indices, gold/silver, and market news headlines
 - Seasons (monthly board resets) and a public submission queue for tips
 - Per-claim price charts (AnaChart-style target-vs-price dots)
 
