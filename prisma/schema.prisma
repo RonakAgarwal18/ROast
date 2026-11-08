@@ -43,6 +43,7 @@ model StockClose {
   stock   Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
   date    DateTime // the trading day (midnight, local)
   close   Float
+  open    Float? // the day's open, when the source file carries it
 
   @@unique([stockId, date])
   @@index([date])
@@ -157,6 +158,9 @@ model Position {
   targetPrice Float?
   exitPrice   Float? // planned stop / "wrong line"
   status      String    @default("OPEN") // OPEN | CLOSED
+  entryMode   String    @default("CLOSE") // CLOSE (priced) | NEXT_OPEN (fill at next session's open)
+  exitMode    String    @default("HOLD") // HOLD | DAY_CLOSE (auto-sell at the fill day's close)
+  plannedAmount Float? // intended ₹ size; units are (re)computed from it at a NEXT_OPEN fill
   tag         String? // e.g. "SELL DECIDED", "HOLD TILL DEC"
   sellPrice   Float?
   sellDate    DateTime?

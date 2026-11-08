@@ -67,7 +67,7 @@ export function parseCsv(text: string): Record<string, string>[] {
 
 /* ---------------- Format detection ---------------- */
 
-export type PriceRow = { symbol: string; close: number; prevClose: number | null };
+export type PriceRow = { symbol: string; close: number; prevClose: number | null; open: number | null };
 export type IndexRow = { symbol: string; close: number };
 
 const num = (v: string | undefined): number | null => {
@@ -149,7 +149,7 @@ export function parseBhavcopyCsv(text: string): ParsedBhavcopy {
       if (series !== "EQ" && series !== "BE") continue;
       const close = num(r["CLOSE_PRICE"]);
       if (!r["SYMBOL"] || close === null) continue;
-      out.prices.push({ symbol: r["SYMBOL"].toUpperCase(), close, prevClose: num(r["PREV_CLOSE"]) });
+      out.prices.push({ symbol: r["SYMBOL"].toUpperCase(), close, prevClose: num(r["PREV_CLOSE"]), open: num(r["OPEN_PRICE"]) });
       out.fileDate = out.fileDate ?? parseDateCell(r["DATE1"]);
     }
     return out;
@@ -163,7 +163,7 @@ export function parseBhavcopyCsv(text: string): ParsedBhavcopy {
       if (series !== "EQ" && series !== "BE") continue;
       const close = num(r["CLOSE"]);
       if (!r["SYMBOL"] || close === null) continue;
-      out.prices.push({ symbol: r["SYMBOL"].toUpperCase(), close, prevClose: num(r["PREVCLOSE"]) });
+      out.prices.push({ symbol: r["SYMBOL"].toUpperCase(), close, prevClose: num(r["PREVCLOSE"]), open: num(r["OPEN"]) });
       out.fileDate = out.fileDate ?? parseDateCell(r["TIMESTAMP"]);
     }
     return out;
@@ -181,6 +181,7 @@ export function parseBhavcopyCsv(text: string): ParsedBhavcopy {
         symbol: r["TCKRSYMB"].toUpperCase(),
         close,
         prevClose: num(r["PRVSCLSGPRIC"]),
+        open: num(r["OPNPRIC"]),
       });
       out.fileDate = out.fileDate ?? parseDateCell(r["TRADDT"]);
     }
@@ -238,9 +239,9 @@ export async function applyBhavcopy(
   // them as bulk UPDATE statements (see the flush below). Duplicate
   // writes to the same stock still resolve last-wins, exactly as the
   // original sequential version behaved.
-  const pending: Array<{ id: number; close: number; prevClose: number | null }> = [];
-  const queue = (stockId: number, close: number, prevClose: number | null) => {
-    pending.push({ id: stockId, close, prevClose });
+  const pending: Array<{ id: number; close: number; prevClose: number | null; open: number | null }> = [];
+  const queue = (stockId: number, close: number, prevClose: number | null, open: number | null = null) => {
+    pending.push({ id: stockId, close, prevClose, open });
     updated++;
   };
 
@@ -252,7 +253,7 @@ export async function applyBhavcopy(
     const bySymbol = new Map(stocks.map((s) => [s.symbol, s.id]));
     for (const row of parsed.prices) {
       const id = bySymbol.get(row.symbol);
-      if (id !== undefined) queue(id, row.close, row.prevClose);
+      if (id !== undefined) queue(id, row.close, row.prevClose, row.open);
     }
   }
 
@@ -281,8 +282,8 @@ export async function applyBhavcopy(
   // this does the same work in ~20 statements. Duplicate ids collapse
   // to their LAST queued write, the same final state the sequential
   // version produced.
-  const byId = new Map<number, { close: number; prevClose: number | null }>();
-  for (const u of pending) byId.set(u.id, { close: u.close, prevClose: u.prevClose });
+  const byId = new Map<number, { close: number; prevClose: number | null; open: number | null }>();
+  for (const u of pending) byId.set(u.id, { close: u.close, prevClose: u.prevClose, open: u.open });
   const flushRows = [...byId.entries()];
   const CHUNK = 500;
   for (let i = 0; i < flushRows.length; i += CHUNK) {
@@ -305,12 +306,14 @@ export async function applyBhavcopy(
   for (let i = 0; i < flushRows.length; i += CHUNK) {
     const slice = flushRows.slice(i, i + CHUNK);
     const values = Prisma.join(
-      slice.map(([id, v]) => Prisma.sql`(${id}::int, ${closeDate}::timestamp, ${v.close}::float8)`)
+      slice.map(
+        ([id, v]) => Prisma.sql`(${id}::int, ${closeDate}::timestamp, ${v.close}::float8, ${v.open}::float8)`
+      )
     );
     await prisma.$executeRaw`
-      INSERT INTO "StockClose" ("stockId", "date", "close")
-      SELECT * FROM (VALUES ${values}) AS v(id, d, c)
-      ON CONFLICT ("stockId", "date") DO UPDATE SET "close" = EXCLUDED."close"`;
+      INSERT INTO "StockClose" ("stockId", "date", "close", "open")
+      SELECT * FROM (VALUES ${values}) AS v(id, d, c, o)
+      ON CONFLICT ("stockId", "date") DO UPDATE SET "close" = EXCLUDED."close", "open" = EXCLUDED."open"`;
   }
   const pruneBefore = new Date(closeDate);
   pruneBefore.setDate(pruneBefore.getDate() - 400);

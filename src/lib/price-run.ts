@@ -14,6 +14,7 @@ import { parseBhavcopyCsv, applyBhavcopy, dayDate } from "./prices";
 import { NAVALL_URL, parseNavAll, refreshFundMaster, applyFundNavs } from "./funds";
 import { recordMoverHeadlines } from "./movers";
 import { applyWorldQuotes } from "./world";
+import { settleDayOrders } from "./dayorders";
 
 const UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
@@ -140,6 +141,24 @@ export async function runNightlyPrices(
         }
       } else {
         notes.push(`NIFTY ${iso}: index file unreachable, skipped`);
+      }
+    }
+
+    // Day orders: fill NEXT_OPEN entries at the day's open and auto-sell
+    // DAY_CLOSE positions at the day's close (best effort, after the
+    // equity files for the trade date are in).
+    if (tradeDate) {
+      try {
+        const settled = await settleDayOrders(tradeDate);
+        if (settled.filled > 0 || settled.closed > 0) {
+          notes.push(
+            `Day orders: ${settled.filled} filled at open, ${settled.closed} sold at close`
+          );
+        }
+      } catch (e) {
+        notes.push(
+          `Day-order step failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)
+        );
       }
     }
 
