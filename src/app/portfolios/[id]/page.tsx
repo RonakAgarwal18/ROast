@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { portfolioSnapshots } from "@/lib/stats";
 import { inr, price, priceOpt, pct, fmtDate, unitsFmt } from "@/lib/format";
-import { addPosition, closePosition, updatePosition, deletePosition } from "@/lib/actions";
+import { addPosition, closePosition, updatePosition, deletePosition, updatePlannedAmount } from "@/lib/actions";
 import { PageTitle, VerdictStamp } from "@/components/ui";
 import { EquityChart } from "@/components/Sparkline";
 import StockPicker from "@/components/StockPicker";
+import { nearestShares } from "@/lib/shares";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,10 @@ export default async function PortfolioDetail({
           </thead>
           <tbody>
             {open.map((p) => {
+              const unfilled = p.entryMode === "NEXT_OPEN" && !!p.plannedAmount;
+              const estUnits = unfilled
+                ? nearestShares(p.plannedAmount!, p.stock.lastClose ?? p.entryPrice)
+                : p.units;
               const pnl =
                 p.stock.lastClose !== null ? (p.stock.lastClose - p.entryPrice) * p.units : null;
               const pnlPct =
@@ -107,15 +112,24 @@ export default async function PortfolioDetail({
                       #{p.stock.symbol} · in {fmtDate(p.entryDate)}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right">{unitsFmt(p.stock.exchange, p.units)}</td>
-                  <td className="px-4 py-3 text-right">{price(p.entryPrice)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {unitsFmt(p.stock.exchange, unfilled ? estUnits : p.units)}
+                    {unfilled && <div className="text-[11px] text-muted">est. shares</div>}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {unfilled ? <span className="text-muted">next open</span> : price(p.entryPrice)}
+                  </td>
                   <td className="px-4 py-3 text-right">{priceOpt(p.stock.lastClose)}</td>
                   <td
                     className={`px-4 py-3 text-right font-display font-bold ${
                       pnl === null ? "text-muted" : pnl >= 0 ? "text-groww" : "text-loss"
                     }`}
                   >
-                    {pnl === null ? (
+                    {unfilled ? (
+                      <span className="text-muted font-normal text-xs">
+                        {inr(p.plannedAmount!)} committed · fills at the open
+                      </span>
+                    ) : pnl === null ? (
                       "—"
                     ) : (
                       <>
@@ -129,6 +143,23 @@ export default async function PortfolioDetail({
                     {p.exitPrice && <span className="pill ml-1">exit {price(p.exitPrice)}</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
+                    {unfilled ? (
+                      <form action={updatePlannedAmount} className="flex gap-1 justify-end items-center">
+                        <input type="hidden" name="positionId" value={p.id} />
+                        <span className="text-xs text-muted">₹</span>
+                        <input
+                          name="plannedAmount"
+                          type="number"
+                          step="any"
+                          required
+                          defaultValue={p.plannedAmount ?? ""}
+                          className={`${inputCls} w-24`}
+                        />
+                        <button className="pill border-groww/60 text-groww hover:bg-panel2 cursor-pointer">
+                          Modify
+                        </button>
+                      </form>
+                    ) : (
                     <form action={closePosition} className="flex gap-1 justify-end">
                       <input type="hidden" name="positionId" value={p.id} />
                       <input
@@ -143,6 +174,7 @@ export default async function PortfolioDetail({
                         Close
                       </button>
                     </form>
+                    )}
                   </td>
                 </tr>
               );

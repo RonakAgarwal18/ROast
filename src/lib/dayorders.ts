@@ -10,6 +10,7 @@
 
 import { prisma } from "./db";
 import { dayDate, writeSnapshots } from "./prices";
+import { nearestShares } from "./shares";
 
 export async function settleDayOrders(
   dateIso: string
@@ -21,42 +22,79 @@ export async function settleDayOrders(
   const pending = await prisma.position.findMany({
     where: { entryMode: "NEXT_OPEN", status: "OPEN" },
   });
-  // Whole shares only, like a real order: units = floor(amount / open).
-  // The unspent remainder of each allocation returns to the portfolio's
-  // cash, so a "₹1,00,000 fully invested" book actually deploys a bit
-  // under ₹1L once executed — exactly as a real account would.
-  const remainders = new Map<number, number>();
+  // Whole shares, sized by nearestShares: the count whose total is
+  // closest to the allocation (one share over when that is closer and
+  // within the 20% overshoot leash). A book-level guard then flips the
+  // largest round-ups back to their floors if the book's total would
+  // exceed the cash it actually has. The signed remainder of each
+  // allocation (negative when rounded up) settles into the book's cash.
+  const byPortfolio = new Map<number, typeof pending>();
   for (const pos of pending) {
-    if (!pos.plannedAmount) continue;
-    const sc = await prisma.stockClose.findUnique({
-      where: { stockId_date: { stockId: pos.stockId, date } },
-    });
-    if (!sc || sc.open == null || sc.open <= 0) continue;
-    const units = Math.floor(pos.plannedAmount / sc.open);
-    await prisma.position.update({
-      where: { id: pos.id },
-      data: {
-        entryPrice: sc.open,
-        units,
-        entryDate: date,
-        entryMode: "CLOSE",
-      },
-    });
-    filled++;
-    const remainder = pos.plannedAmount - units * sc.open;
-    if (remainder > 0) {
-      remainders.set(pos.portfolioId, (remainders.get(pos.portfolioId) ?? 0) + remainder);
-    }
+    const arr = byPortfolio.get(pos.portfolioId) ?? [];
+    arr.push(pos);
+    byPortfolio.set(pos.portfolioId, arr);
   }
-  for (const [portfolioId, amount] of remainders) {
+  for (const [portfolioId, positions] of byPortfolio) {
     const pf = await prisma.portfolio.findUnique({
       where: { id: portfolioId },
       select: { cash: true },
     });
-    if (pf) {
+    if (!pf) continue;
+    type Fill = {
+      pos: (typeof positions)[number];
+      open: number;
+      units: number;
+      floorUnits: number;
+    };
+    const fills: Fill[] = [];
+    for (const pos of positions) {
+      if (!pos.plannedAmount) continue;
+      const sc = await prisma.stockClose.findUnique({
+        where: { stockId_date: { stockId: pos.stockId, date } },
+      });
+      if (!sc || sc.open == null || sc.open <= 0) continue;
+      fills.push({
+        pos,
+        open: sc.open,
+        units: nearestShares(pos.plannedAmount, sc.open),
+        floorUnits: Math.floor(pos.plannedAmount / sc.open),
+      });
+    }
+    if (fills.length === 0) continue;
+    let total = fills.reduce((s2, f) => s2 + f.units * f.open, 0);
+    const budget =
+      pf.cash + fills.reduce((s2, f) => s2 + (f.pos.plannedAmount ?? 0), 0);
+    const roundedUp = fills
+      .filter((f) => f.units > f.floorUnits)
+      .sort(
+        (a, b) =>
+          b.units * b.open -
+          (b.pos.plannedAmount ?? 0) -
+          (a.units * a.open - (a.pos.plannedAmount ?? 0))
+      );
+    for (const f of roundedUp) {
+      if (total <= budget) break;
+      total -= f.open;
+      f.units = f.floorUnits;
+    }
+    let remainderSum = 0;
+    for (const f of fills) {
+      await prisma.position.update({
+        where: { id: f.pos.id },
+        data: {
+          entryPrice: f.open,
+          units: f.units,
+          entryDate: date,
+          entryMode: "CLOSE",
+        },
+      });
+      filled++;
+      remainderSum += (f.pos.plannedAmount ?? 0) - f.units * f.open;
+    }
+    if (remainderSum !== 0) {
       await prisma.portfolio.update({
         where: { id: portfolioId },
-        data: { cash: pf.cash + amount },
+        data: { cash: pf.cash + remainderSum },
       });
     }
   }

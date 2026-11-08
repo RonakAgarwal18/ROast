@@ -1,5 +1,6 @@
 "use server";
 import { wholeShares } from "@/lib/format";
+import { nearestShares } from "@/lib/shares";
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -86,6 +87,41 @@ export async function createPortfolio(formData: FormData) {
 }
 
 /* ---------------- Positions ---------------- */
+
+/** Modify an UNFILLED (NEXT_OPEN) order's ₹ allocation. The book's
+ * cash absorbs the difference; the new amount may not exceed the old
+ * allocation plus the cash the book actually has free. Once the order
+ * fills at the open it is a normal position and no longer editable. */
+export async function updatePlannedAmount(formData: FormData) {
+  await requireOwner();
+  const positionId = parseInt(String(formData.get("positionId")), 10);
+  const newAmount = parseFloat(String(formData.get("plannedAmount") ?? ""));
+  if (!positionId || !newAmount || newAmount <= 0) return;
+  const pos = await prisma.position.findUnique({
+    where: { id: positionId },
+    include: { portfolio: true, stock: true },
+  });
+  if (!pos || pos.status !== "OPEN" || pos.entryMode !== "NEXT_OPEN" || !pos.plannedAmount)
+    return;
+  const pf = pos.portfolio;
+  if (newAmount > pos.plannedAmount + pf.cash) return;
+  const est = pos.stock.lastClose
+    ? nearestShares(newAmount, pos.stock.lastClose)
+    : pos.units;
+  await prisma.position.update({
+    where: { id: positionId },
+    data: { plannedAmount: newAmount, units: est },
+  });
+  if (!pf.isReal) {
+    await prisma.portfolio.update({
+      where: { id: pf.id },
+      data: { cash: pf.cash + (pos.plannedAmount - newAmount) },
+    });
+  }
+  revalidatePath(`/portfolios/${pf.id}`);
+  revalidatePath("/league");
+  revalidatePath("/");
+}
 
 export async function addPosition(formData: FormData) {
   await requireOwner();
