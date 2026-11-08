@@ -21,22 +21,44 @@ export async function settleDayOrders(
   const pending = await prisma.position.findMany({
     where: { entryMode: "NEXT_OPEN", status: "OPEN" },
   });
+  // Whole shares only, like a real order: units = floor(amount / open).
+  // The unspent remainder of each allocation returns to the portfolio's
+  // cash, so a "₹1,00,000 fully invested" book actually deploys a bit
+  // under ₹1L once executed — exactly as a real account would.
+  const remainders = new Map<number, number>();
   for (const pos of pending) {
     if (!pos.plannedAmount) continue;
     const sc = await prisma.stockClose.findUnique({
       where: { stockId_date: { stockId: pos.stockId, date } },
     });
     if (!sc || sc.open == null || sc.open <= 0) continue;
+    const units = Math.floor(pos.plannedAmount / sc.open);
     await prisma.position.update({
       where: { id: pos.id },
       data: {
         entryPrice: sc.open,
-        units: pos.plannedAmount / sc.open,
+        units,
         entryDate: date,
         entryMode: "CLOSE",
       },
     });
     filled++;
+    const remainder = pos.plannedAmount - units * sc.open;
+    if (remainder > 0) {
+      remainders.set(pos.portfolioId, (remainders.get(pos.portfolioId) ?? 0) + remainder);
+    }
+  }
+  for (const [portfolioId, amount] of remainders) {
+    const pf = await prisma.portfolio.findUnique({
+      where: { id: portfolioId },
+      select: { cash: true },
+    });
+    if (pf) {
+      await prisma.portfolio.update({
+        where: { id: portfolioId },
+        data: { cash: pf.cash + amount },
+      });
+    }
   }
 
   const toClose = await prisma.position.findMany({
