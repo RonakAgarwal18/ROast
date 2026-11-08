@@ -44,6 +44,7 @@ const NAV = [
   { href: "/league", label: "League" },
   { href: "/movers", label: "Movers" },
   { href: "/portfolios", label: "Portfolios" },
+  { href: "/funds", label: "Funds" },
   { href: "/add", label: "Add Analysis" },
   { href: "/checklists", label: "Checklists" },
   { href: "/calendar", label: "Calendar" },

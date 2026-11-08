@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "./db";
+import { fundSymbol, fundDisplayName, backfillFundHistory } from "./funds";
 import { parseAnalysis } from "./parser";
 import { parseBhavcopyCsv, applyBhavcopy, writeSnapshots } from "./prices";
 import { runNightlyPrices, recordPriceRun } from "./price-run";
@@ -565,4 +566,69 @@ export async function deleteMoverNote(formData: FormData) {
   const date = new Date(`${dateStr}T00:00:00.000Z`);
   await prisma.moverNote.deleteMany({ where: { date, symbol } });
   revalidatePath("/movers");
+}
+
+/* ---------------- Round 7: fund benchmarks ---------------- */
+
+export async function addFundBenchmark(formData: FormData) {
+  await requireOwner();
+  const schemeCode = String(formData.get("schemeCode") ?? "").trim();
+  const cashRaw = parseFloat(String(formData.get("cash") ?? "100000"));
+  const cash = isNaN(cashRaw) ? 100000 : Math.max(1000, cashRaw);
+  const scheme = await prisma.fundScheme.findUnique({ where: { schemeCode } });
+  if (!scheme || scheme.nav == null) redirect("/funds?error=unknown-scheme");
+
+  const nav: number = scheme.nav;
+  const navDate: Date = scheme.navDate ?? new Date();
+  const symbol = fundSymbol(schemeCode);
+  const stock = await prisma.stock.upsert({
+    where: { symbol },
+    update: { lastClose: nav, closeDate: scheme.navDate },
+    create: {
+      symbol,
+      name: fundDisplayName(scheme),
+      exchange: "MF",
+      lastClose: nav,
+      prevClose: null,
+      closeDate: scheme.navDate,
+    },
+  });
+  await backfillFundHistory(stock.id, schemeCode);
+
+  const source = await prisma.source.upsert({
+    where: { name: "Benchmarks" },
+    update: {},
+    create: { name: "Benchmarks", kind: "BENCHMARK" },
+  });
+  const name = `${fundDisplayName(scheme)} — Benchmark`;
+  const existing = await prisma.portfolio.findUnique({ where: { name } });
+  if (existing) redirect(`/portfolios/${existing.id}`);
+
+  const portfolio = await prisma.portfolio.create({
+    data: {
+      name,
+      ownerSourceId: source.id,
+      isReal: false,
+      startingCash: cash,
+      cash: 0,
+      sizingRule: "FIXED",
+    },
+  });
+  await prisma.position.create({
+    data: {
+      portfolioId: portfolio.id,
+      stockId: stock.id,
+      units: cash / nav,
+      entryPrice: nav,
+      entryDate: navDate,
+      status: "OPEN",
+      tag: "BENCHMARK",
+    },
+  });
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const iso = `${navDate.getFullYear()}-${p2(navDate.getMonth() + 1)}-${p2(navDate.getDate())}`;
+  await writeSnapshots(iso);
+  revalidatePath("/league");
+  revalidatePath("/funds");
+  redirect(`/portfolios/${portfolio.id}`);
 }

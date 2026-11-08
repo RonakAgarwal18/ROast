@@ -48,6 +48,27 @@ model StockClose {
   @@index([date])
 }
 
+/// One mutual fund scheme from AMFI's daily NAV file (Round 7).
+/// Refreshed by the nightly price run. A scheme joins the league by
+/// becoming a Stock with exchange = "MF" and symbol = "MF<schemeCode>",
+/// so league maths, snapshots and charts work unchanged; its NAV
+/// history lives in StockClose.
+model FundScheme {
+  id         Int       @id @default(autoincrement())
+  schemeCode String    @unique
+  isin       String?
+  name       String
+  plan       String // Direct Plan | Regular Plan
+  option     String // Growth Option | IDCW Option | ...
+  amc        String
+  category   String
+  nav        Float?
+  navDate    DateTime?
+  updatedAt  DateTime  @updatedAt
+
+  @@index([name])
+}
+
 /// A human-curated "why it moved" note for one stock on one day, shown on
 /// the Daily Movers page. Scorekeeper rules: a cause needs a source link,
 /// and "no verified cause found" is a valid, honest entry.

@@ -11,6 +11,7 @@
 
 import { prisma } from "./db";
 import { parseBhavcopyCsv, applyBhavcopy, dayDate } from "./prices";
+import { NAVALL_URL, parseNavAll, refreshFundMaster, applyFundNavs } from "./funds";
 
 const UA =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
@@ -138,6 +139,34 @@ export async function runNightlyPrices(
       } else {
         notes.push(`NIFTY ${iso}: index file unreachable, skipped`);
       }
+    }
+
+    // Mutual funds (Round 7, best effort): refresh the AMFI master and
+    // apply fresh NAVs to any fund benchmarks in the league. A failure
+    // here never fails the equity run.
+    try {
+      const navText = await fetchText(NAVALL_URL);
+      if (navText) {
+        const fundRows = parseNavAll(navText);
+        if (fundRows.length > 1000) {
+          const master = await refreshFundMaster(fundRows);
+          const applied = await applyFundNavs(fundRows);
+          notes.push(
+            `Funds: master ${master} schemes, ${applied.updated} league NAVs${
+              applied.navDate ? ` @ ${applied.navDate}` : ""
+            }`
+          );
+          snapshots += applied.snapshots;
+        } else {
+          notes.push("Funds: NAV file parsed too few rows, skipped");
+        }
+      } else {
+        notes.push("Funds: NAV file unreachable, skipped");
+      }
+    } catch (e) {
+      notes.push(
+        `Funds step failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)
+      );
     }
 
     const summary: PriceRunSummary = nseApplied
