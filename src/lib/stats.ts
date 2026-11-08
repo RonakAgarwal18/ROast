@@ -30,8 +30,22 @@ export async function portfolioRows(): Promise<PortfolioRow[]> {
 
   return portfolios.map((p) => {
     const open = p.positions.filter((x) => x.status === "OPEN");
-    const invested = open.reduce((s, x) => s + x.units * x.entryPrice, 0);
-    const marketValue = open.reduce((s, x) => s + x.units * (x.stock.lastClose ?? 0), 0);
+    const invested = open.reduce(
+      (s, x) =>
+        s + (x.entryMode === "NEXT_OPEN" && x.plannedAmount ? x.plannedAmount : x.units * x.entryPrice),
+      0
+    );
+    // An unfilled NEXT_OPEN order is committed cash, not an investment:
+    // it contributes its planned amount (return 0%) until the nightly
+    // run fills it at the open and flips it to a normal position.
+    const marketValue = open.reduce(
+      (s, x) =>
+        s +
+        (x.entryMode === "NEXT_OPEN" && x.plannedAmount
+          ? x.plannedAmount
+          : x.units * (x.stock.lastClose ?? 0)),
+      0
+    );
     const totalValue = p.isReal ? marketValue : p.cash + marketValue;
     const base = p.isReal ? invested : p.startingCash;
     const returnPct = base > 0 ? ((totalValue - base) / base) * 100 : 0;

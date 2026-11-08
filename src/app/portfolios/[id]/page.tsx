@@ -31,8 +31,19 @@ export default async function PortfolioDetail({
 
   const snaps = await portfolioSnapshots(portfolio.id);
   const open = portfolio.positions.filter((p) => p.status === "OPEN");
-  const invested = open.reduce((s, p) => s + p.units * p.entryPrice, 0);
-  const market = open.reduce((s, p) => s + p.units * (p.stock.lastClose ?? 0), 0);
+  const invested = open.reduce(
+    (s, p) =>
+      s + (p.entryMode === "NEXT_OPEN" && p.plannedAmount ? p.plannedAmount : p.units * p.entryPrice),
+    0
+  );
+  const market = open.reduce(
+    (s, p) =>
+      s +
+      (p.entryMode === "NEXT_OPEN" && p.plannedAmount
+        ? p.plannedAmount
+        : p.units * (p.stock.lastClose ?? 0)),
+    0
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
